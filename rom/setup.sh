@@ -59,6 +59,17 @@ applied 'NetOnFlagSet(id);' src/event_data.c && say "  ✅ event_data.c: NetOnFl
 applied 'NetOnVarSet(id, value);' src/event_data.c && say "  ✅ event_data.c: NetOnVarSet()" \
   || die "VarSet hook did not apply — add manually (rom/README.md §Hooks)"
 
+# 3c. battle_setup.c: open the co-op join window when battles start
+if ! applied 'NetOnBattleOpen' src/battle_setup.c; then
+  hook src/battle_setup.c 'static void DoStandardWildBattle(void)' "battle open hooks"
+  sed -i '0,/^#include/s//#include "net\/net.h"\n&/' "$PKE/src/battle_setup.c"
+  perl -0pi -e 's/(static void DoStandardWildBattle\(void\)\n\{\n    LockPlayerFieldControls\(\);)/$1\n    NetOnBattleOpen(0, GetMonData(&gEnemyParty[0], MON_DATA_SPECIES, NULL));/' "$PKE/src/battle_setup.c"
+  perl -0pi -e 's/(void BattleSetup_StartTrainerBattle\(void\)\n\{)/$1\n    NetOnBattleOpen(1, gTrainerBattleOpponent_A);/' "$PKE/src/battle_setup.c"
+fi
+applied 'NetOnBattleOpen(0,' src/battle_setup.c && say "  ✅ battle_setup.c: wild battle hook"
+applied 'NetOnBattleOpen(1,' src/battle_setup.c && say "  ✅ battle_setup.c: trainer battle hook" \
+  || die "trainer battle hook did not apply — add manually (rom/README.md §Hooks)"
+
 # --- 4. build -----------------------------------------------------------------------
 say "building (make modern)…"
 make -C "$PKE" modern -j"$(nproc)"

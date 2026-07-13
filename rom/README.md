@@ -40,9 +40,12 @@ pokeemerald drifts and an anchor is missing, apply by hand:
    just before `FlagSet` returns, and `NetOnVarSet(id, value);` right after
    `VarSet` stores the value. (Remote applies are reentrancy-guarded in
    `net_flags.c`.)
-3. *(Phase 1.5, optional now)* **`src/battle_setup.c`** — call
-   `NetOnBattleOpen(kind, trainerOrSpecies);` where wild/trainer battles are
-   set up, to open the co-op join window.
+3. **`src/battle_setup.c`** — add `#include "net/net.h"`; call
+   `NetOnBattleOpen(0, GetMonData(&gEnemyParty[0], MON_DATA_SPECIES, NULL));`
+   at the top of `DoStandardWildBattle`, and
+   `NetOnBattleOpen(1, gTrainerBattleOpponent_A);` at the top of
+   `BattleSetup_StartTrainerBattle` — these open the co-op join window on
+   peers' screens when a battle begins.
 
 Everything else lives in overlay files that compile standalone (pokeemerald's
 Makefile globs `src/*.c`).
@@ -56,7 +59,8 @@ Makefile globs `src/*.c`).
 | Flag/var report + remote apply with reentrancy guard | ✅ complete (`net_flags.c`) |
 | Server-driven warps (teleport, regroup) applied on safe frames | ✅ complete (`net_warp.c`) |
 | Party summaries, battle session bookkeeping, shared-seed RNG on start | ✅ complete (`net_battle.c`) |
-| **Ghost rendering** — a sprite per remote player in the overworld | 🚧 Phase 1: implement `RenderGhosts()` in `net_overworld.c`. Recommended: one `CreateObjectGraphicsSprite(OBJ_EVENT_GFX_RIVAL_BRENDAN_NORMAL, …)` per active ghost on the current map, positioned from tile coords ×16 minus camera offset; despawn via `DestroySprite` when `active` drops. `gNetGhosts[]` is already live data |
+| **Ghost rendering** — a sprite per remote player in the overworld | ✅ complete (`net_overworld.c`): camera-tracked player sprites (Brendan/May by slot), facing anims, map-scoped spawn/despawn, stale-id invalidation across map loads. Tile-snapped; movement interpolation is Phase-1 polish |
+| **Battle join window** — encounters announce to peers | ✅ hooks in `DoStandardWildBattle` (wild) and `BattleSetup_StartTrainerBattle` (trainer) via setup.sh |
 | **Battle lockstep** — merged-party injection, relayed turn inputs into battle controllers, bag scoping | 🚧 Phase 3 (`docs/ROADMAP.md`); the messages and session state are already plumbed |
 
 ## Symbol-drift note
