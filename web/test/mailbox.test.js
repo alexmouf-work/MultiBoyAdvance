@@ -1,0 +1,109 @@
+// Unit tests for the JS mailbox codec (web/js/bridge/mailbox.js) — the layout
+// half of the game/bridge contract. Runs in Node (the module is DOM-free).
+
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  Mailbox, findMailbox, MAILBOX_MAGIC, MAILBOX_SIZE, PROTO_VERSION, RING_SIZE, T, enc, dec,
+} from '../js/bridge/mailbox.js';
+
+function plantMailbox(memSize = 4096, base = 512) {
+  const mem = new Uint8Array(memSize);
+  mem.set(MAILBOX_MAGIC, base);
+  mem[base + 4] = PROTO_VERSION;
+  return { mem, box: new Mailbox(mem, base), base };
+}
+
+test('scanner finds a 4-aligned mailbox and rejects wrong version', () => {
+  const { mem, base } = plantMailbox();
+  assert.equal(findMailbox(mem), base);
+
+  // decoy with wrong version earlier in memory is skipped
+  mem.set(MAILBOX_MAGIC, 128);
+  mem[128 + 4] = 99;
+  assert.equal(findMailbox(mem), base);
+
+  // unaligned magic is skipped
+  const mem2 = new Uint8Array(4096);
+  mem2.set(MAILBOX_MAGIC, 130); // not 4-aligned
+  mem2[130 + 4] = PROTO_VERSION;
+  assert.equal(findMailbox(mem2), -1);
+});
+
+test('rings: write/read round-trip, order preserved, capacity respected', () => {
+  const { box } = plantMailbox();
+
+  // host->game ring: writeIn / (game-side) _readRing(532)
+  assert.equal(box.writeIn(T.FLAG_APPLY, enc.flagApply(0x2a1)), true);
+  assert.equal(box.writeIn(T.WARP, enc.warp(3, 7, -5, 40)), true);
+  const got = box._readRing(532);
+  assert.equal(got.length, 2);
+  assert.equal(got[0].type, T.FLAG_APPLY);
+  assert.deepEqual(dec.flag(got[0].payload), { id: 0x2a1 });
+  assert.deepEqual(dec.warp(got[1].payload), { g: 3, n: 7, x: -5, y: 40 });
+
+  // fill until full: capacity is RING_SIZE-1 bytes, records are 2+len
+  let wrote = 0;
+  while (box.writeIn(T.GHOST, enc.ghost(1, 1, 0, 9, 8, 3, 1, 0))) wrote++;
+  assert.equal(wrote, Math.floor((RING_SIZE - 1) / (2 + 10)));
+  // drain frees space again
+  box._readRing(532);
+  assert.equal(box.writeIn(T.GHOST, enc.ghost(1, 1, 0, 9, 8, 3, 1, 0)), true);
+});
+
+test('rings wrap across the buffer boundary without corruption', () => {
+  const { box } = plantMailbox();
+  const payload = enc.presence(1, 2, 300, -300, 4, 0); // 8 bytes
+  // Cycle enough records through that head/tail wrap several times.
+  for (let i = 0; i < 300; i++) {
+    assert.equal(box._writeRing(16, T.PRESENCE, payload), true);
+    const [rec] = box._readRing(16);
+    assert.equal(rec.type, T.PRESENCE);
+    assert.deepEqual(dec.presence(rec.payload), { g: 1, n: 2, x: 300, y: -300, f: 4, s: 0 });
+  }
+});
+
+test('battle codecs: start/input round-trip including seed edge values', () => {
+  for (const seed of [0, 1, 0x7fffffff, 0xdeadbeef, 0xffffffff]) {
+    const p = enc.battleStart(seed, [2, 0], 'coop');
+    const d = dec.battleCmd(p);
+    assert.equal(d.sub, 'start');
+    assert.equal(d.seed, seed >>> 0);
+    assert.deepEqual(d.order, [2, 0]);
+    assert.equal(d.mode, 'coop');
+  }
+  const pvp = dec.battleCmd(enc.battleStart(42, [1, 3], 'pvp'));
+  assert.equal(pvp.mode, 'pvp');
+
+  const input = dec.battleCmd(enc.battleTurnRelay(7, 3, 1, 2, 0, 0x1234));
+  assert.deepEqual(input, { sub: 'input', turn: 7, from: 3, a: 1, move: 2, tgt: 0, x: 0x1234 });
+});
+
+test('party summary and presence codecs round-trip', () => {
+  const mons = [
+    { sp: 252, lv: 34, hp: 100 },
+    { sp: 384, lv: 70, hp: 1 },
+  ];
+  assert.deepEqual(dec.partySummary(enc.partySummary(mons)), mons);
+
+  const p = dec.presence(enc.presence(24, 3, -1, 1023, 2, 1));
+  assert.deepEqual(p, { g: 24, n: 3, x: -1, y: 1023, f: 2, s: 1 });
+});
+
+test('header fields: frame counter, slot, hostAttached, validity', () => {
+  const { mem, box, base } = plantMailbox();
+  assert.equal(box.valid, true);
+  box.setPlayerSlot(5);
+  box.setHostAttached(1);
+  assert.equal(mem[base + 8], 5);
+  assert.equal(mem[base + 9], 1);
+  mem[base + 6] = 0x34;
+  mem[base + 7] = 0x12;
+  assert.equal(box.frameCounter, 0x1234);
+  mem[base] = 0; // clobber magic -> invalid (reset detection)
+  assert.equal(box.valid, false);
+});
+
+test('struct size constant matches the C layout', () => {
+  assert.equal(MAILBOX_SIZE, 16 + 2 * (4 + RING_SIZE));
+});

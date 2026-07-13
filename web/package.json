@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "vendor": "node vendor.js",
-    "postinstall": "node vendor.js"
+    "postinstall": "node vendor.js",
+    "test": "node --test"
   },
   "dependencies": {
     "@thenick775/mgba-wasm": "^2.4.1"
