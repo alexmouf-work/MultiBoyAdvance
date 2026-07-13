@@ -1,0 +1,173 @@
+# MultiBoyAdvance Protocol Specification
+
+**Version 1.** This document is the single source of truth for both halves of the
+protocol. Implementations that must stay in lockstep with it:
+
+| Layer | Implementation |
+|---|---|
+| EWRAM mailbox (C) | `rom/overlay/include/net/mailbox.h` |
+| EWRAM mailbox (JS) | `web/js/bridge/mailbox.js` |
+| EWRAM mailbox (Lua) | `rom/lua/mba-bridge.lua` |
+| Server wire (JSON) | `server/src/protocol.js`, `web/js/net/socket.js` |
+
+There are two protocol layers:
+
+1. **The mailbox** — a fixed struct in GBA EWRAM through which the *game* (C code
+   in the ROM) and the *host bridge* (JS in the browser, or Lua in desktop mGBA)
+   exchange binary TLV messages once per frame.
+2. **The wire** — JSON messages between the host bridge and the authoritative
+   server, over WebSocket (browser) or newline-delimited TCP (Lua/mGBA, which has
+   no WebSocket support).
+
+The game never sees the wire; the server never sees the mailbox. The bridge
+translates.
+
+---
+
+## 1. The EWRAM mailbox
+
+### 1.1 Location and discovery
+
+The ROM defines a single `struct NetMailbox` instance (`gNetMailbox`) in EWRAM
+(`0x02000000`–`0x0203FFFF`), 4-byte aligned, at whatever address the linker picks.
+Bridges MUST NOT hard-code the address. Discovery:
+
+1. Scan EWRAM for the 8-byte prefix `4D 42 41 30 01 ..` (`"MBA0"` + version byte;
+   the two bytes after version are don't-care during scan) at 4-byte-aligned offsets.
+2. Cache the address. Re-verify `magic` + `version` before every frame's exchange;
+   if it disappears (reset, new game loaded), re-scan.
+3. The game increments `frameCounter` every frame. A bridge that sees a stale
+   counter for > 60 exchanges should treat the game as halted.
+
+### 1.2 Struct layout (all little-endian; C is the normative definition)
+
+```
+offset size field
+ 0     4    magic          'M','B','A','0'
+ 4     1    version        1
+ 5     1    gameState      0=BOOT 1=OVERWORLD 2=BATTLE 3=MENU 4=OTHER
+ 6     2    frameCounter   u16, wraps; incremented once per NetTick()
+ 8     1    playerSlot     0xFF until the host writes the server-assigned slot
+ 9     1    hostAttached   0 until a bridge writes 1; game may show "online" UI
+10     6    reserved       zero
+16     4+512  out ring     game → host   (head u16, tail u16, buf[512])
+532    4+512  in ring      host → game   (head u16, tail u16, buf[512])
+```
+
+Total size: 1048 bytes.
+
+### 1.3 Rings
+
+Single-producer / single-consumer circular byte buffers.
+
+- `head`: next write index (owned by producer). `tail`: next read index (owned by
+  consumer). Empty when `head == tail`; the ring holds at most 511 bytes.
+- Producers write the whole TLV record then advance `head` once (record-atomic:
+  the head is only published after the full record is in the buffer).
+- The **game** produces `out` and consumes `in`, inside `NetTick()` once per frame.
+- The **bridge** consumes `out` and produces `in`, inside its per-frame callback.
+  Because both sides run strictly frame-interleaved (the bridge callback runs
+  while the core is paused between frames), no further synchronization is needed.
+
+### 1.4 TLV records
+
+```
+[type u8][len u8][payload: len bytes]
+```
+
+`len` is the payload length only. Unknown types MUST be skipped (len makes every
+record self-delimiting). Types `0x01–0x7F` flow game→host, `0x80–0xFF` host→game.
+
+#### Game → host
+
+| Type | Name | Payload |
+|---|---|---|
+| 0x01 | `PRESENCE` | mapGroup u8, mapNum u8, x s16, y s16, facing u8, moveState u8 — sent when position/map/facing changes, at most once per frame |
+| 0x02 | `FLAG_SET` | flagId u16 — a synced story flag was set locally |
+| 0x03 | `VAR_SET` | varId u16, value u16 |
+| 0x05 | `PARTY_SUMMARY` | count u8, then per mon: species u16, level u8, hpPct u8 — sent on party change; server uses it for battle merges |
+| 0x06 | `REQUEST` | sub u8, arg u8: sub 1=teleport-to-slot(arg), 2=pvp-challenge(arg), 3=pvp-accept(arg) |
+| 0x10 | `BATTLE_EVENT` | sub u8, then: sub 1=ENCOUNTER_OPEN {kind u8, opponent u16}; sub 2=TURN_INPUT {turn u8, action u8, moveSlot u8, target u8, extra u16}; sub 3=OUTCOME {result u8: 1=win 2=loss 3=flee} |
+| 0x7F | `HELLO` | version u8 — game finished booting netcode |
+
+#### Host → game
+
+| Type | Name | Payload |
+|---|---|---|
+| 0x81 | `GHOST` | slot u8, active u8, mapGroup u8, mapNum u8, x s16, y s16, facing u8, moveState u8 — position of another player; active=0 means despawn |
+| 0x82 | `FLAG_APPLY` | flagId u16 — set this flag (arrived from world state) |
+| 0x83 | `VAR_APPLY` | varId u16, value u16 |
+| 0x85 | `WARP` | mapGroup u8, mapNum u8, x s16, y s16 — teleport the local player (applied at next safe overworld frame) |
+| 0x86 | `ASSIGN` | slot u8 — server-assigned player slot (bridge also writes `playerSlot` in the header) |
+| 0x90 | `BATTLE_CMD` | sub u8, then: sub 1=START {seed u32, playerCount u8, order[4] u8, mode u8}; sub 2=TURN_INPUT {turn u8, fromSlot u8, action u8, moveSlot u8, target u8, extra u16}; sub 3=END {result u8} |
+
+Battle payloads are scaffolding for Phase 3 (see ROADMAP); their shape may gain
+fields, guarded by the `version` byte.
+
+---
+
+## 2. The wire (bridge ⇄ server)
+
+JSON objects. Transport framing:
+
+- **WebSocket** (browser): one JSON object per text message. Path: `ws://host:8484/ws`.
+- **TCP** (mGBA Lua): newline-delimited JSON on port **8485**. Identical schema.
+
+Every message has `t` (type). Server assigns each connection an integer `slot`
+(0–7) for compactness; `id` is a longer opaque string used for reconnection.
+
+### 2.1 Bridge → server
+
+| `t` | Fields | Meaning |
+|---|---|---|
+| `hello` | `name` string, `proto` 1, `resume?` id | join the world (or resume a session) |
+| `pos` | `g,n` map group/num, `x,y` s16, `f` facing, `s` moveState | local player moved |
+| `flag` | `id` int | synced flag was set locally |
+| `var` | `id` int, `v` int | synced var changed |
+| `party` | `mons` [{`sp`,`lv`,`hp`}] | party summary for merges |
+| `battle.open` | `kind` int, `opp` int | local player is entering a battle; open a join window |
+| `battle.join` | `sid` string | join battle session `sid` (spectate→control) |
+| `battle.input` | `sid`, `turn`, `a`, `move`, `tgt`, `x` | turn input |
+| `battle.end` | `sid`, `result` 1/2/3 | initiator reports outcome |
+| `tp` | `to` slot | teleport me to player `to` |
+| `pvp` | `to` slot | challenge player `to` |
+| `pvp.accept` | `from` slot | accept a challenge |
+| `ping` | — | keepalive (expect `pong`) |
+
+### 2.2 Server → bridge
+
+| `t` | Fields | Meaning |
+|---|---|---|
+| `welcome` | `id`, `slot`, `players` [{slot,name}], `flags` [int], `vars` [[id,v]] | join accepted; replay world state |
+| `join` / `leave` | `slot`, `name?` | roster changes |
+| `ghost` | `slot,g,n,x,y,f,s` | another player's presence (only sent to players on the same map; a synthetic `s:255` despawns) |
+| `flag` / `var` | `id`, `v?` | authoritative world-state update |
+| `battle.offer` | `sid`, `from` slot, `kind`, `opp`, `ttl` ms | someone opened a battle you may join |
+| `battle.start` | `sid`, `seed`, `order` [slots], `party` [mons], `bags` {slot:[...]} | session begins (merged party, shared seed, turn order) |
+| `battle.input` | `sid`, `turn`, `from`, `a`, `move`, `tgt`, `x` | relayed turn input |
+| `battle.end` | `sid`, `result`, `warp?` {g,n,x,y} | session over; optional respawn/return warp |
+| `warp` | `g,n,x,y` | teleport instruction (tp/pvp/whiteout) |
+| `pvp.req` | `from` slot, `name` | incoming challenge |
+| `pong` / `error` | — / `msg` | |
+
+### 2.3 Authority rules
+
+- **Presence**: client-authoritative (soft sync). The server only routes, with
+  per-map interest management.
+- **Flags/vars**: server-authoritative. Locally set flags are *reported*; the
+  server records and broadcasts them (including back to the sender — the ROM
+  applies idempotently). Only IDs within the configured synced ranges are accepted.
+- **Battles**: the server owns session lifecycle, the merged party (rule below),
+  the RNG seed, and turn order; clients own only their own turn inputs. Outcome
+  is reported by the initiating client in Phase 3 (server-side validation is a
+  Phase 5 hardening item).
+- **Party merge rule**: participants sorted stable; from each, take its top
+  `ceil(6 / N)` Pokémon by level (tie-break: earlier party position), then trim
+  to 6 by highest level overall.
+
+### 2.4 Timing
+
+- Presence: bridge sends `pos` only on change, throttled to 10/s.
+- Ghost fan-out: immediate on receipt (≤ 8 players; no batching needed).
+- Battle join window (`ttl`): default 10 000 ms.
+- Keepalive: bridges ping every 15 s; server drops connections silent for 60 s.
