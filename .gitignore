@@ -17,3 +17,6 @@ compile_commands.json
 
 # mac finder crap
 *.DS_Store
+
+# Claude Code personal settings (per-user approvals; project settings.json IS tracked)
+.claude/settings.local.json
