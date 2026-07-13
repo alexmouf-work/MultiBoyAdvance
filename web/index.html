@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MultiBoyAdvance</title>
+  <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body>
+  <header>
+    <h1>MultiBoyAdvance</h1>
+    <div id="chips">
+      <span id="chip-mode" class="chip">not started</span>
+      <span id="chip-server" class="chip">server: —</span>
+      <span id="chip-mailbox" class="chip">mailbox: —</span>
+    </div>
+  </header>
+
+  <section id="login">
+    <div class="card">
+      <h2>Join the world</h2>
+      <label>Trainer name <input id="name" maxlength="16" placeholder="Alex" /></label>
+      <div class="row">
+        <label class="file-btn">
+          Load ROM (.gba)
+          <input id="rom" type="file" accept=".gba" hidden />
+        </label>
+        <button id="btn-demo">Demo mode (no ROM)</button>
+      </div>
+      <p class="hint">
+        The ROM must be the MultiBoyAdvance netcode build — see <code>rom/README.md</code>.
+        Demo mode exercises the full multiplayer stack with a simulated overworld.
+      </p>
+    </div>
+  </section>
+
+  <section id="stage" hidden>
+    <div id="left">
+      <canvas id="screen" width="480" height="320"></canvas>
+      <div id="demo-controls" hidden>
+        <button id="btn-battle">Start wild battle</button>
+        <button id="btn-flag">Set story flag 0x2A1</button>
+        <button id="btn-end-battle" hidden>Win battle</button>
+      </div>
+      <div id="offers"></div>
+    </div>
+    <aside id="right">
+      <h3>Players</h3>
+      <ul id="players"></ul>
+      <h3>Events</h3>
+      <ul id="log"></ul>
+    </aside>
+  </section>
+
+  <script type="module" src="/js/main.js"></script>
+</body>
+</html>

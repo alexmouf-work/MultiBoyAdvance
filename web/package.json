@@ -1,0 +1,14 @@
+{
+  "name": "multiboyadvance-web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Browser client: mGBA-WASM embed + mailbox bridge + UI (no bundler; plain ES modules)",
+  "type": "module",
+  "scripts": {
+    "vendor": "node vendor.js",
+    "postinstall": "node vendor.js"
+  },
+  "dependencies": {
+    "@thenick775/mgba-wasm": "^2.4.1"
+  }
+}
