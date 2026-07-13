@@ -70,6 +70,15 @@ applied 'NetOnBattleOpen(0,' src/battle_setup.c && say "  ✅ battle_setup.c: wi
 applied 'NetOnBattleOpen(1,' src/battle_setup.c && say "  ✅ battle_setup.c: trainer battle hook" \
   || die "trainer battle hook did not apply — add manually (rom/README.md §Hooks)"
 
+# 3d. battle_main.c: report finalized turn choices (emit-only)
+if ! applied 'NetOnTurnFinalized' src/battle_main.c; then
+  hook src/battle_main.c 'static void CheckFocusPunch_ClearVarsBeforeTurnStarts(void)' "turn-finalized hook"
+  sed -i '0,/^#include/s//#include "net\/net.h"\n&/' "$PKE/src/battle_main.c"
+  perl -0pi -e 's/(static void CheckFocusPunch_ClearVarsBeforeTurnStarts\(void\)\n\{)/$1\n    NetOnTurnFinalized();/' "$PKE/src/battle_main.c"
+fi
+applied 'NetOnTurnFinalized();' src/battle_main.c && say "  ✅ battle_main.c: turn-finalized hook" \
+  || die "turn hook did not apply — add manually (rom/README.md §Hooks)"
+
 # --- 4. build -----------------------------------------------------------------------
 say "building (make modern)…"
 make -C "$PKE" modern -j"$(nproc)"

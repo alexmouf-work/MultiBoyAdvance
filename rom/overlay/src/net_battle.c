@@ -11,6 +11,8 @@
 #include <string.h>
 
 #include "global.h"
+#include "battle.h"
+#include "battle_anim.h" // GetBattlerSide
 #include "pokemon.h"
 #include "random.h"
 #include "net/mailbox.h"
@@ -245,6 +247,36 @@ void NetSendTurnInput(u8 action, u8 moveSlot, u8 target, u16 extra)
     p[5] = extra & 0xFF;
     p[6] = extra >> 8;
     NetOutWrite(NET_MSG_BATTLE_EVENT, p, 7);
+}
+
+// Hooked at the top of CheckFocusPunch_ClearVarsBeforeTurnStarts — the first
+// point that runs exactly once per turn with every battler's action/move
+// finalized. Emit-only: reports the local player's side choices so peers and
+// spectators can follow (and, in full lockstep, replay) the turn. Never
+// mutates battle state.
+void NetOnTurnFinalized(void)
+{
+    u32 i;
+
+    if (!sSession.active || !NetIsOnline())
+        return;
+
+    sSession.turnNo++;
+    for (i = 0; i < gBattlersCount; i++)
+    {
+        u8 p[7];
+
+        if (GetBattlerSide(i) != B_SIDE_PLAYER)
+            continue;
+        p[0] = NET_BSUB_TURN_INPUT;
+        p[1] = sSession.turnNo;
+        p[2] = gChosenActionByBattler[i];
+        p[3] = i; // battler index; move id travels in extra
+        p[4] = 0;
+        p[5] = gChosenMoveByBattler[i] & 0xFF;
+        p[6] = gChosenMoveByBattler[i] >> 8;
+        NetOutWrite(NET_MSG_BATTLE_EVENT, p, 7);
+    }
 }
 
 void NetSendBattleOutcome(u8 result)

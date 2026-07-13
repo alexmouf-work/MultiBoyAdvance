@@ -46,6 +46,10 @@ pokeemerald drifts and an anchor is missing, apply by hand:
    `NetOnBattleOpen(1, gTrainerBattleOpponent_A);` at the top of
    `BattleSetup_StartTrainerBattle` — these open the co-op join window on
    peers' screens when a battle begins.
+4. **`src/battle_main.c`** — add `#include "net/net.h"`; call
+   `NetOnTurnFinalized();` at the top of
+   `CheckFocusPunch_ClearVarsBeforeTurnStarts` (runs once per turn after all
+   action/move choices are locked; the hook is emit-only).
 
 Everything else lives in overlay files that compile standalone (pokeemerald's
 Makefile globs `src/*.c`).

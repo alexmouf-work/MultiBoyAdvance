@@ -21,6 +21,11 @@ void NetOnBattleOpen(u8 kind, u16 opponent);
 void NetSendPartySummary(void);
 void NetSendFullParty(void);
 
+// battle_main.c hook — call at the top of
+// CheckFocusPunch_ClearVarsBeforeTurnStarts to report finalized turn choices
+// (emit-only; no effect on battle state).
+void NetOnTurnFinalized(void);
+
 // Ghost state for other players (net_overworld.c owns rendering in Phase 1).
 struct NetGhost
 {
