@@ -1,4 +1,5 @@
 import { Socket } from './net/socket.js';
+import * as mailbox from './bridge/mailbox.js';
 import { Bridge } from './bridge/bridge.js';
 import { UI } from './ui/ui.js';
 import { assertAdapter } from './emu/adapter.js';
@@ -23,6 +24,7 @@ async function start(mode, romFile = null) {
   const bridge = new Bridge(adapter, socket);
   const ui = new UI(socket, bridge, adapter);
   window.mba = { adapter, socket, bridge, ui }; // console + e2e access
+  window.mbaMailbox = mailbox;
 
   bridge.onStatus = (s) =>
     ui.setStatus('#chip-mailbox', `mailbox: ${s}`, s === 'attached' || s === 'game-ready');

@@ -14,6 +14,12 @@ export class MgbaAdapter {
     const { default: mGBA } = await import('/vendor/mgba.js');
     this.#module = await mGBA({ canvas });
     await this.#module.FSInit?.();
+  }
+
+  // Core callbacks bind to the *current* core, which only exists once a game
+  // is loaded — registering before loadGame attaches to nothing and the
+  // bridge never receives a frame.
+  #registerCoreCallbacks() {
     this.#module.addCoreCallbacks({
       videoFrameEndedCallback: () => {
         for (const cb of this.#frameCbs) cb();
@@ -27,6 +33,7 @@ export class MgbaAdapter {
     await new Promise((resolve) => mod.uploadRom(file, resolve));
     const ok = mod.loadGame(`${mod.filePaths().gamePath}/${file.name}`);
     if (!ok) throw new Error(`mGBA failed to load ${file.name}`);
+    this.#registerCoreCallbacks();
   }
 
   onFrameEnd(cb) {
