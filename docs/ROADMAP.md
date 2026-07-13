@@ -29,6 +29,11 @@ acceptance test passes.
   distributes seed + turn order; ROM injects merged party, drives turns from
   relayed inputs; bag filtered to the acting player; win → return warp,
   loss → shared Pokémon Center whiteout.
+- Already done ahead of schedule: encounter join-window hooks, shared-seed
+  RNG at START, full-party wire transfer (PROTOCOL §1.5), server-side wire
+  merge, and merged-party injection/restore around the session. Remaining:
+  feeding relayed TURN_INPUTs into the battle controllers, in-ROM join UI,
+  and bag scoping.
 - **Accept**: scripted 2-player co-op battle with a merged 3+3 party where both
   screens stay identical turn-by-turn, and both outcomes (win/loss placement)
   behave as specified.

@@ -28,3 +28,30 @@ export function mergeParties(participants) {
     .sort((a, b) => b.lv - a.lv || a.owner - b.owner || a.idx - b.idx)
     .slice(0, PARTY_SIZE);
 }
+
+/**
+ * Same rule over full wire mons (docs/PROTOCOL.md §1.5): each participant's
+ * `fullMons` is [{lv, b: number[32]}]. Returns the merged 32-byte blobs in
+ * final party order, for battle.start's `partyWire`.
+ * @param {Array<{slot: number, fullMons: Array<{lv: number, b: number[]}>}>} participants
+ * @returns {number[][]}
+ */
+export function mergeWireParties(participants) {
+  const n = participants.length;
+  if (n === 0) return [];
+  const perPlayer = Math.ceil(PARTY_SIZE / n);
+
+  const picked = [];
+  for (const p of participants) {
+    const ranked = (p.fullMons ?? [])
+      .map((m, idx) => ({ owner: p.slot, idx, lv: m.lv, b: m.b }))
+      .sort((a, b) => b.lv - a.lv || a.idx - b.idx)
+      .slice(0, perPlayer);
+    picked.push(...ranked);
+  }
+
+  return picked
+    .sort((a, b) => b.lv - a.lv || a.owner - b.owner || a.idx - b.idx)
+    .slice(0, PARTY_SIZE)
+    .map((m) => m.b);
+}

@@ -7,6 +7,7 @@ const CLIENT_MESSAGES = {
   flag: ['id'],
   var: ['id', 'v'],
   party: [],
+  'party.full': [],
   'battle.open': ['kind', 'opp'],
   'battle.join': [],
   'battle.input': ['turn', 'a'],

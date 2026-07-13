@@ -19,6 +19,7 @@ class Client {
     this.map = null; // {g, n} once the first pos arrives
     this.pos = { x: 0, y: 0, f: 0, s: 0 };
     this.party = []; // latest party summary [{sp,lv,hp}]
+    this.fullMons = []; // latest full wire mons [{lv, b:[32 ints]}]
     this.lastSeen = Date.now();
   }
 }
@@ -101,6 +102,7 @@ export class World {
       case 'flag': return this._onFlag(client, msg);
       case 'var': return this._onVar(client, msg);
       case 'party': return this._onParty(client, msg);
+      case 'party.full': return this._onPartyFull(client, msg);
       case 'battle.open': return this._onBattleOpen(client, msg);
       case 'battle.join': return this._onBattleJoin(client, msg);
       case 'battle.input': return this._onBattleInput(client, msg);
@@ -168,6 +170,14 @@ export class World {
     client.party = msg.mons
       .slice(0, 6)
       .map((m) => ({ sp: m.sp | 0, lv: m.lv | 0, hp: m.hp | 0 }));
+  }
+
+  _onPartyFull(client, msg) {
+    if (!Array.isArray(msg.mons)) return;
+    client.fullMons = msg.mons
+      .slice(0, 6)
+      .filter((m) => Array.isArray(m.b) && m.b.length === 32)
+      .map((m) => ({ lv: m.lv | 0, b: m.b.map((x) => x & 0xff) }));
   }
 
   // ---- battles -----------------------------------------------------------------

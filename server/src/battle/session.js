@@ -5,7 +5,7 @@
 //        ROM simply continues its local single-player battle.
 
 import crypto from 'node:crypto';
-import { mergeParties } from './merge.js';
+import { mergeParties, mergeWireParties } from './merge.js';
 
 let nextSessionNum = 1;
 
@@ -63,15 +63,25 @@ export class BattleSession {
 
   startPayload() {
     const order = this.participants.map((p) => p.slot);
-    const party =
-      this.mode === 'pvp'
-        ? null // PvP: each ROM fields its own real party
-        : mergeParties(
-            this.participants.map((p) => ({ slot: p.slot, mons: p.party })),
-          );
+    const isPvp = this.mode === 'pvp'; // PvP: each ROM fields its own real party
+    const party = isPvp
+      ? null
+      : mergeParties(this.participants.map((p) => ({ slot: p.slot, mons: p.party })));
+    const partyWire = isPvp
+      ? null
+      : mergeWireParties(this.participants.map((p) => ({ slot: p.slot, fullMons: p.fullMons })));
     const bags = {};
     for (const p of this.participants) bags[p.slot] = true; // own-bag marker; item lists stay client-side
-    return { t: 'battle.start', sid: this.sid, seed: this.seed, order, mode: this.mode, party, bags };
+    return {
+      t: 'battle.start',
+      sid: this.sid,
+      seed: this.seed,
+      order,
+      mode: this.mode,
+      party,
+      partyWire: partyWire?.length ? partyWire : null,
+      bags,
+    };
   }
 
   relayInput(from, msg) {

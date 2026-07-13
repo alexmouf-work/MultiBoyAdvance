@@ -139,10 +139,11 @@ end
 -- ------------------------------------------------------------- protocol ---
 local T = {
   PRESENCE = 0x01, FLAG_SET = 0x02, VAR_SET = 0x03, PARTY = 0x05, REQUEST = 0x06,
-  BATTLE_EVENT = 0x10, HELLO = 0x7F,
+  PARTY_FULL = 0x07, BATTLE_EVENT = 0x10, HELLO = 0x7F,
   GHOST = 0x81, FLAG_APPLY = 0x82, VAR_APPLY = 0x83, WARP = 0x85, ASSIGN = 0x86,
   BATTLE_CMD = 0x90,
 }
+local MON_WIRE_SIZE = 32
 local MAGIC = "MBA0\1" -- magic + version byte
 local MAILBOX_SIZE = 1048
 local RING = 512
@@ -311,6 +312,16 @@ local function gameToWire(rec)
       mons[#mons + 1] = { sp = u16(b, o), lv = p[o + 3], hp = p[o + 4] }
     end
     send({ t = "party", mons = mons })
+  elseif t == T.PARTY_FULL then
+    local mons = {}
+    for i = 0, (p[1] or 0) - 1 do
+      local bytes = {}
+      for j = 1, MON_WIRE_SIZE do
+        bytes[j] = p[1 + i * MON_WIRE_SIZE + j]
+      end
+      mons[#mons + 1] = { lv = bytes[21], b = bytes } -- level at wire byte 20 (0-based)
+    end
+    send({ t = "party.full", mons = mons })
   elseif t == T.REQUEST then
     local sub, arg = p[1], p[2]
     if sub == 1 then send({ t = "tp", to = arg })
@@ -358,6 +369,16 @@ handleWire = function(m)
   elseif m.t == "battle.start" then
     sid = m.sid
     local seed = m.seed
+    -- Merged party must be staged in the ROM before START lands.
+    if m.partyWire and #m.partyWire > 0 then
+      local pp = { 4, #m.partyWire }
+      for _, mon in ipairs(m.partyWire) do
+        for _, byte in ipairs(mon) do
+          pp[#pp + 1] = byte
+        end
+      end
+      queueIn(T.BATTLE_CMD, pp)
+    end
     queueIn(T.BATTLE_CMD, {
       1,
       seed % 256, math.floor(seed / 0x100) % 256, math.floor(seed / 0x10000) % 256, math.floor(seed / 0x1000000) % 256,

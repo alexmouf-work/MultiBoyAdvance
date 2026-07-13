@@ -134,6 +134,8 @@ export class DemoAdapter {
           if (c.sub === 'start') {
             this.battle = c;
             this.events.push({ t: 'battle.started', seed: c.seed, order: c.order, mode: c.mode });
+          } else if (c.sub === 'party') {
+            this.events.push({ t: 'battle.party', count: c.mons.length });
           } else if (c.sub === 'input') {
             this.events.push({ t: 'battle.input', from: c.from, a: c.a });
           } else if (c.sub === 'end') {
@@ -170,6 +172,18 @@ export class DemoAdapter {
       { sp: 263, lv: 21, hp: 90 },
     ];
     this._out(T.PARTY_SUMMARY, enc.partySummary(party));
+    // Matching synthetic wire mons (§1.5) so battle.start carries partyWire.
+    const wire = party.map((m, i) => {
+      const b = new Array(32).fill(0);
+      b[0] = 0x40 + i; // personality
+      b[4] = 0x77; // otId
+      b[8] = m.sp & 0xff;
+      b[9] = m.sp >> 8;
+      b[12] = 33; // move 1: tackle
+      b[20] = m.lv;
+      return b;
+    });
+    this._out(T.PARTY_FULL, enc.partyFull(wire));
   }
 
   /** Demo UI hook: set a story flag locally (as if a boss was beaten). */

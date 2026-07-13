@@ -117,6 +117,14 @@ test('two browsers share one world end-to-end', async () => {
   assert.deepEqual(annStart.order, benStart.order);
   assert.deepEqual([...annStart.order].sort(), [annSlot, benSlot].sort());
 
+  // The merged full party (top ceil(6/2)=3 wire mons from each of the two
+  // 3-mon demo parties) must have reached both games via BATTLE_CMD PARTY.
+  for (const page of [ann, ben]) {
+    const staged = await page.evaluate(() =>
+      window.mba.adapter.events.find((e) => e.t === 'battle.party')?.count ?? 0);
+    assert.equal(staged, 6, 'merged party staged in the game before START');
+  }
+
   // initiator wins; joiner regroups at the battle site via warp
   await ann.click('#btn-end-battle');
   await ben.waitForFunction(

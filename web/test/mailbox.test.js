@@ -107,3 +107,23 @@ test('header fields: frame counter, slot, hostAttached, validity', () => {
 test('struct size constant matches the C layout', () => {
   assert.equal(MAILBOX_SIZE, 16 + 2 * (4 + RING_SIZE));
 });
+
+test('full-party wire codec: round-trip and BATTLE_CMD PARTY framing', () => {
+  const monA = new Array(32).fill(0).map((_, i) => i); // 0..31
+  const monB = new Array(32).fill(7);
+  monA[20] = 42; // level byte
+  monB[20] = 9;
+
+  const decoded = dec.partyFull(enc.partyFull([monA, monB]));
+  assert.equal(decoded.length, 2);
+  assert.deepEqual(decoded[0].b, monA);
+  assert.equal(decoded[0].lv, 42);
+  assert.equal(decoded[1].lv, 9);
+
+  // host->game framing: sub=4, count, then blobs — fits one TLV (len ≤ 255)
+  const framed = enc.battleParty([monA, monB, monA, monB, monA, monB]);
+  assert.equal(framed[0], 4);
+  assert.equal(framed[1], 6);
+  assert.equal(framed.length, 2 + 6 * 32);
+  assert.ok(framed.length <= 255);
+});

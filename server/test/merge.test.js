@@ -1,8 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mergeParties } from '../src/battle/merge.js';
+import { mergeParties, mergeWireParties } from '../src/battle/merge.js';
 
 const mon = (sp, lv) => ({ sp, lv });
+const wireMon = (lv, tag) => {
+  const b = new Array(32).fill(0);
+  b[20] = lv;
+  b[31] = tag; // marker so the test can tell blobs apart
+  return { lv, b };
+};
 
 test('two players: top 3 from each by level', () => {
   const merged = mergeParties([
@@ -37,6 +43,19 @@ test('level ties broken by earlier party position', () => {
   ]);
   // player 0 contributes its first three mons, in party order
   assert.deepEqual(merged.filter((m) => m.owner === 0).map((m) => m.idx), [0, 1, 2]);
+});
+
+test('wire merge follows the same rule and returns 32-byte blobs in order', () => {
+  const merged = mergeWireParties([
+    { slot: 0, fullMons: [wireMon(50, 1), wireMon(12, 2), wireMon(33, 3), wireMon(45, 4)] },
+    { slot: 1, fullMons: [wireMon(60, 5), wireMon(55, 6), wireMon(5, 7)] },
+  ]);
+  assert.equal(merged.length, 6);
+  assert.ok(merged.every((b) => b.length === 32));
+  // by level desc: 60,55,50,45,33,5 -> tags 5,6,1,4,3,7
+  assert.deepEqual(merged.map((b) => b[31]), [5, 6, 1, 4, 3, 7]);
+  assert.deepEqual(mergeWireParties([]), []);
+  assert.deepEqual(mergeWireParties([{ slot: 0, fullMons: undefined }]), []);
 });
 
 test('short parties and solo participants degrade gracefully', () => {

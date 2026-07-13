@@ -13,6 +13,7 @@ static bool8 sInitialized = FALSE;
 void NetOverworldTick(void);
 void NetApplyIncoming(void);
 void NetWarpTick(void);
+void NetBattleTick(void);
 
 static void NetInit(void)
 {
@@ -100,7 +101,8 @@ void NetTick(void)
     // Consume everything the bridge queued for us since last frame.
     NetApplyIncoming();
 
-    // Producers: presence, pending warp application.
+    // Producers: presence, party change detection, pending warp application.
     NetOverworldTick();
+    NetBattleTick();
     NetWarpTick();
 }

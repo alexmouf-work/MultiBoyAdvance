@@ -1,13 +1,14 @@
-// Co-op / PvP battle netcode — Phase 3 scaffolding.
+// Co-op / PvP battle netcode.
 //
-// Plumbing implemented now: encounter reporting (join-window trigger), session
-// bookkeeping from BATTLE_CMD START/INPUT/END, party summaries for the
-// server's merge, and the outbound turn-input/outcome writers. What Phase 3
-// adds on top: injecting the merged party into gPlayerParty for the session,
-// feeding relayed inputs into the battle controllers, seeding gRngValue from
-// the shared seed at battle start, and bag scoping. See docs/ROADMAP.md.
+// Implemented: encounter reporting (join-window trigger), session bookkeeping
+// from BATTLE_CMD START/INPUT/END, party summaries + full 32-byte wire-mon
+// transfer for the server's merge, merged-party injection into gPlayerParty
+// (with backup/restore around the session), and shared-seed RNG at battle
+// start. Remaining Phase-3 work: feeding relayed TURN_INPUTs into the battle
+// controllers and bag scoping. See docs/ROADMAP.md.
 
 #include <stddef.h>
+#include <string.h>
 
 #include "global.h"
 #include "pokemon.h"
@@ -27,7 +28,31 @@ struct NetBattleSession
 
 static struct NetBattleSession sSession;
 
+// Merged party staged by BATTLE_CMD PARTY, applied at START, undone at END.
+static EWRAM_DATA u8 sPendingParty[1 + PARTY_SIZE * NET_MON_WIRE_SIZE] = {0};
+static EWRAM_DATA struct Pokemon sPartyBackup[PARTY_SIZE] = {0};
+static bool8 sHavePendingParty;
+static bool8 sPartyInjected;
+static u16 sLastPartyChecksum;
+static u8 sPartyResendDelay;
+
 #define RD_U16(p, i) ((u16)((p)[i] | ((p)[(i) + 1] << 8)))
+#define RD_U32(p, i) \
+    ((u32)((p)[i] | ((p)[(i) + 1] << 8) | ((u32)(p)[(i) + 2] << 16) | ((u32)(p)[(i) + 3] << 24)))
+
+static void WR_U16(u8 *p, u32 i, u16 v)
+{
+    p[i] = v & 0xFF;
+    p[i + 1] = v >> 8;
+}
+
+static void WR_U32(u8 *p, u32 i, u32 v)
+{
+    p[i] = v & 0xFF;
+    p[i + 1] = (v >> 8) & 0xFF;
+    p[i + 2] = (v >> 16) & 0xFF;
+    p[i + 3] = (v >> 24) & 0xFF;
+}
 
 void NetOnBattleOpen(u8 kind, u16 opponent)
 {
@@ -40,6 +65,138 @@ void NetOnBattleOpen(u8 kind, u16 opponent)
     p[2] = opponent & 0xFF;
     p[3] = opponent >> 8;
     NetOutWrite(NET_MSG_BATTLE_EVENT, p, 4);
+}
+
+// ---- 32-byte wire-mon codec (layout: mailbox.h / docs/PROTOCOL.md §1.5) ----
+
+static void MonToWire(struct Pokemon *mon, u8 *w)
+{
+    u32 ivs = 0;
+    u32 i;
+
+    WR_U32(w, 0, GetMonData(mon, MON_DATA_PERSONALITY, NULL));
+    WR_U32(w, 4, GetMonData(mon, MON_DATA_OT_ID, NULL));
+    WR_U16(w, 8, GetMonData(mon, MON_DATA_SPECIES, NULL));
+    WR_U16(w, 10, GetMonData(mon, MON_DATA_HELD_ITEM, NULL));
+    for (i = 0; i < MAX_MON_MOVES; i++)
+        WR_U16(w, 12 + i * 2, GetMonData(mon, MON_DATA_MOVE1 + i, NULL));
+    w[20] = GetMonData(mon, MON_DATA_LEVEL, NULL);
+    w[21] = GetMonData(mon, MON_DATA_ABILITY_NUM, NULL);
+    for (i = 0; i < NUM_STATS; i++)
+        ivs |= (GetMonData(mon, MON_DATA_HP_IV + i, NULL) & 0x1F) << (i * 5);
+    WR_U32(w, 22, ivs);
+    for (i = 0; i < NUM_STATS; i++)
+        w[26 + i] = GetMonData(mon, MON_DATA_HP_EV + i, NULL);
+}
+
+static void MonFromWire(const u8 *w, struct Pokemon *mon)
+{
+    u32 personality = RD_U32(w, 0);
+    u32 otId = RD_U32(w, 4);
+    u16 species = RD_U16(w, 8);
+    u16 heldItem = RD_U16(w, 10);
+    u32 ivs = RD_U32(w, 22);
+    u16 maxHp;
+    u32 i;
+
+    CreateMon(mon, species, w[20], 0, TRUE, personality, OT_ID_PRESET, otId);
+    SetMonData(mon, MON_DATA_HELD_ITEM, &heldItem);
+    SetMonData(mon, MON_DATA_ABILITY_NUM, &w[21]);
+    for (i = 0; i < MAX_MON_MOVES; i++)
+    {
+        u16 move = RD_U16(w, 12 + i * 2);
+        SetMonData(mon, MON_DATA_MOVE1 + i, &move);
+    }
+    for (i = 0; i < NUM_STATS; i++)
+    {
+        u8 iv = (ivs >> (i * 5)) & 0x1F;
+        SetMonData(mon, MON_DATA_HP_IV + i, &iv);
+        SetMonData(mon, MON_DATA_HP_EV + i, &w[26 + i]);
+    }
+    CalculateMonStats(mon);
+    maxHp = GetMonData(mon, MON_DATA_MAX_HP, NULL);
+    SetMonData(mon, MON_DATA_HP, &maxHp);
+}
+
+// ---- merged-party injection --------------------------------------------------
+
+static void InjectPendingParty(void)
+{
+    u8 count = sPendingParty[0];
+    u32 i;
+
+    if (!sHavePendingParty || count == 0 || count > PARTY_SIZE)
+        return;
+    if (!sPartyInjected)
+        memcpy(sPartyBackup, gPlayerParty, sizeof(sPartyBackup));
+
+    ZeroPlayerPartyMons();
+    for (i = 0; i < count; i++)
+        MonFromWire(&sPendingParty[1 + i * NET_MON_WIRE_SIZE], &gPlayerParty[i]);
+    CalculatePlayerPartyCount();
+    sPartyInjected = TRUE;
+    sHavePendingParty = FALSE;
+}
+
+static void RestorePartyIfInjected(void)
+{
+    if (!sPartyInjected)
+        return;
+    memcpy(gPlayerParty, sPartyBackup, sizeof(sPartyBackup));
+    CalculatePlayerPartyCount();
+    sPartyInjected = FALSE;
+}
+
+void NetSendFullParty(void)
+{
+    u8 p[1 + PARTY_SIZE * NET_MON_WIRE_SIZE];
+    u8 count = 0;
+    u32 i;
+
+    if (!NetIsOnline() || sPartyInjected)
+        return;
+    for (i = 0; i < PARTY_SIZE; i++)
+    {
+        u16 species = GetMonData(&gPlayerParty[i], MON_DATA_SPECIES_OR_EGG, NULL);
+
+        if (species == SPECIES_NONE || species == SPECIES_EGG)
+            continue;
+        MonToWire(&gPlayerParty[i], &p[1 + count * NET_MON_WIRE_SIZE]);
+        count++;
+    }
+    p[0] = count;
+    NetOutWrite(NET_MSG_PARTY_FULL, p, 1 + count * NET_MON_WIRE_SIZE);
+}
+
+// Cheap change detection so the full party is re-sent only when it changes.
+// Called once per frame from NetTick.
+void NetBattleTick(void)
+{
+    u16 sum = 0;
+    u32 i;
+
+    if (!NetIsOnline() || sPartyInjected)
+        return;
+    if (sPartyResendDelay)
+    {
+        sPartyResendDelay--;
+        return;
+    }
+    sPartyResendDelay = 64;
+
+    for (i = 0; i < PARTY_SIZE; i++)
+    {
+        sum += GetMonData(&gPlayerParty[i], MON_DATA_SPECIES_OR_EGG, NULL);
+        sum += GetMonData(&gPlayerParty[i], MON_DATA_LEVEL, NULL) << 8;
+        sum += GetMonData(&gPlayerParty[i], MON_DATA_HP, NULL);
+        sum += GetMonData(&gPlayerParty[i], MON_DATA_PERSONALITY, NULL) & 0xFF;
+    }
+    if (sum != sLastPartyChecksum)
+    {
+        sLastPartyChecksum = sum;
+        NetSendPartySummary();
+        NetSendFullParty();
+    }
 }
 
 void NetSendPartySummary(void)
@@ -113,7 +270,7 @@ void NetOnBattleCmd(const u8 *payload, u8 len)
         if (len < 11)
             return;
         sSession.active = TRUE;
-        sSession.seed = payload[1] | (payload[2] << 8) | ((u32)payload[3] << 16) | ((u32)payload[4] << 24);
+        sSession.seed = RD_U32(payload, 1);
         sSession.playerCount = payload[5];
         sSession.order[0] = payload[6];
         sSession.order[1] = payload[7];
@@ -121,6 +278,9 @@ void NetOnBattleCmd(const u8 *payload, u8 len)
         sSession.order[3] = payload[9];
         sSession.mode = payload[10];
         sSession.turnNo = 0;
+        // Co-op: the merged party staged by NET_BSUB_PARTY takes the field.
+        if (sSession.mode == 0)
+            InjectPendingParty();
         // Deterministic lockstep starts here: every participant seeds the
         // same RNG before the battle engine draws from it.
         SeedRng((u16)sSession.seed);
@@ -136,6 +296,15 @@ void NetOnBattleCmd(const u8 *payload, u8 len)
 
     case NET_BSUB_END_OR_OUTCOME:
         sSession.active = FALSE;
+        RestorePartyIfInjected();
+        break;
+
+    case NET_BSUB_PARTY: // {count u8, count * NET_MON_WIRE_SIZE bytes}
+        if (len < 2 || payload[1] > PARTY_SIZE ||
+            len < 2 + payload[1] * NET_MON_WIRE_SIZE)
+            return;
+        memcpy(sPendingParty, &payload[1], 1 + payload[1] * NET_MON_WIRE_SIZE);
+        sHavePendingParty = TRUE;
         break;
     }
 }

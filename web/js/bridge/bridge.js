@@ -117,6 +117,9 @@ export class Bridge {
       case T.PARTY_SUMMARY:
         this.#socket.send({ t: 'party', mons: dec.partySummary(payload) });
         break;
+      case T.PARTY_FULL:
+        this.#socket.send({ t: 'party.full', mons: dec.partyFull(payload) });
+        break;
       case T.REQUEST: {
         const r = dec.request(payload);
         if (r.sub === 1) this.#socket.send({ t: 'tp', to: r.arg });
@@ -154,6 +157,8 @@ export class Bridge {
     s.on('warp', (m) => this.#queueIn(T.WARP, enc.warp(m.g, m.n, m.x, m.y)));
     s.on('battle.start', (m) => {
       this.#sid = m.sid;
+      // Merged party must be staged in the ROM before START lands.
+      if (m.partyWire?.length) this.#queueIn(T.BATTLE_CMD, enc.battleParty(m.partyWire));
       this.#queueIn(T.BATTLE_CMD, enc.battleStart(m.seed, m.order, m.mode));
     });
     s.on('battle.input', (m) => {

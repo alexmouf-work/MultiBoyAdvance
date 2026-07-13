@@ -25,9 +25,16 @@ enum {
     NET_MSG_VAR_SET = 0x03,       // varId u16, value u16
     NET_MSG_PARTY_SUMMARY = 0x05, // count u8, {species u16, level u8, hpPct u8} * count
     NET_MSG_REQUEST = 0x06,       // sub u8 (1=tp 2=pvp 3=pvp-accept), arg u8
+    NET_MSG_PARTY_FULL = 0x07,    // count u8, NET_MON_WIRE_SIZE bytes * count
     NET_MSG_BATTLE_EVENT = 0x10,  // sub u8: 1=encounter{kind u8,opp u16} 2=input 3=outcome{result u8}
     NET_MSG_HELLO = 0x7F,         // version u8
 };
+
+// 32-byte wire encoding of one Pokémon (docs/PROTOCOL.md §1.5):
+//  0 personality u32 | 4 otId u32 | 8 species u16 | 10 heldItem u16
+// 12 moves[4] u16    | 20 level u8 | 21 abilityNum u8
+// 22 ivs u32 (6 x 5 bits) | 26 evs[6] u8
+#define NET_MON_WIRE_SIZE 32
 
 // host -> game TLV types (0x80-0xFF)
 enum {
@@ -44,6 +51,7 @@ enum {
     NET_BSUB_START_OR_ENCOUNTER = 1,
     NET_BSUB_TURN_INPUT = 2,
     NET_BSUB_END_OR_OUTCOME = 3,
+    NET_BSUB_PARTY = 4, // host->game only: count u8, wire mons (sent before START)
 };
 
 struct NetRing

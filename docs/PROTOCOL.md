@@ -85,7 +85,8 @@ record self-delimiting). Types `0x01–0x7F` flow game→host, `0x80–0xFF` hos
 | 0x01 | `PRESENCE` | mapGroup u8, mapNum u8, x s16, y s16, facing u8, moveState u8 — sent when position/map/facing changes, at most once per frame |
 | 0x02 | `FLAG_SET` | flagId u16 — a synced story flag was set locally |
 | 0x03 | `VAR_SET` | varId u16, value u16 |
-| 0x05 | `PARTY_SUMMARY` | count u8, then per mon: species u16, level u8, hpPct u8 — sent on party change; server uses it for battle merges |
+| 0x05 | `PARTY_SUMMARY` | count u8, then per mon: species u16, level u8, hpPct u8 — sent on party change; drives roster UI |
+| 0x07 | `PARTY_FULL` | count u8, then count × 32-byte wire mons (§1.5) — sent on party change; the server merges these for co-op battles |
 | 0x06 | `REQUEST` | sub u8, arg u8: sub 1=teleport-to-slot(arg), 2=pvp-challenge(arg), 3=pvp-accept(arg) |
 | 0x10 | `BATTLE_EVENT` | sub u8, then: sub 1=ENCOUNTER_OPEN {kind u8, opponent u16}; sub 2=TURN_INPUT {turn u8, action u8, moveSlot u8, target u8, extra u16}; sub 3=OUTCOME {result u8: 1=win 2=loss 3=flee} |
 | 0x7F | `HELLO` | version u8 — game finished booting netcode |
@@ -99,10 +100,30 @@ record self-delimiting). Types `0x01–0x7F` flow game→host, `0x80–0xFF` hos
 | 0x83 | `VAR_APPLY` | varId u16, value u16 |
 | 0x85 | `WARP` | mapGroup u8, mapNum u8, x s16, y s16 — teleport the local player (applied at next safe overworld frame) |
 | 0x86 | `ASSIGN` | slot u8 — server-assigned player slot (bridge also writes `playerSlot` in the header) |
-| 0x90 | `BATTLE_CMD` | sub u8, then: sub 1=START {seed u32, playerCount u8, order[4] u8, mode u8}; sub 2=TURN_INPUT {turn u8, fromSlot u8, action u8, moveSlot u8, target u8, extra u16}; sub 3=END {result u8} |
+| 0x90 | `BATTLE_CMD` | sub u8, then: sub 1=START {seed u32, playerCount u8, order[4] u8, mode u8}; sub 2=TURN_INPUT {turn u8, fromSlot u8, action u8, moveSlot u8, target u8, extra u16}; sub 3=END {result u8}; sub 4=PARTY {count u8, count × 32-byte wire mons} — sent *before* START; the ROM stages it and injects at START (co-op), restoring the original party at END |
 
-Battle payloads are scaffolding for Phase 3 (see ROADMAP); their shape may gain
-fields, guarded by the `version` byte.
+### 1.5 Wire mon (32 bytes, little-endian)
+
+The transferable encoding of one Pokémon — enough to reconstruct a
+battle-identical mon via `CreateMon` + `SetMonData` on every participant:
+
+```
+offset size field
+ 0     4    personality (nature/gender/shiny derive from this + otId)
+ 4     4    otId
+ 8     2    species
+10     2    heldItem
+12     8    moves[4] (u16 each)
+20     1    level
+21     1    abilityNum
+22     4    ivs — 6 stats × 5 bits, bit 0..29, HP first
+26     6    evs — hp, atk, def, speed, spatk, spdef (u8 each)
+```
+
+Normative C codec: `MonToWire`/`MonFromWire` in `rom/overlay/src/net_battle.c`.
+In wire JSON, a wire mon travels as `b` = array of 32 integers, alongside `lv`
+(duplicated from byte 20) so the server can apply the merge rule without
+parsing the blob.
 
 ---
 
@@ -124,7 +145,8 @@ Every message has `t` (type). Server assigns each connection an integer `slot`
 | `pos` | `g,n` map group/num, `x,y` s16, `f` facing, `s` moveState | local player moved |
 | `flag` | `id` int | synced flag was set locally |
 | `var` | `id` int, `v` int | synced var changed |
-| `party` | `mons` [{`sp`,`lv`,`hp`}] | party summary for merges |
+| `party` | `mons` [{`sp`,`lv`,`hp`}] | party summary (roster UI) |
+| `party.full` | `mons` [{`lv`, `b`:[32 ints]}] | full wire mons (§1.5) for co-op merges |
 | `battle.open` | `kind` int, `opp` int | local player is entering a battle; open a join window |
 | `battle.join` | `sid` string | join battle session `sid` (spectate→control) |
 | `battle.input` | `sid`, `turn`, `a`, `move`, `tgt`, `x` | turn input |
@@ -143,7 +165,7 @@ Every message has `t` (type). Server assigns each connection an integer `slot`
 | `ghost` | `slot,g,n,x,y,f,s` | another player's presence (only sent to players on the same map; a synthetic `s:255` despawns) |
 | `flag` / `var` | `id`, `v?` | authoritative world-state update |
 | `battle.offer` | `sid`, `from` slot, `kind`, `opp`, `ttl` ms | someone opened a battle you may join |
-| `battle.start` | `sid`, `seed`, `order` [slots], `party` [mons], `bags` {slot:[...]} | session begins (merged party, shared seed, turn order) |
+| `battle.start` | `sid`, `seed`, `order` [slots], `party` [summary mons], `partyWire` [[32 ints]] (co-op only), `bags` {slot:[...]} | session begins (merged party, shared seed, turn order) |
 | `battle.input` | `sid`, `turn`, `from`, `a`, `move`, `tgt`, `x` | relayed turn input |
 | `battle.end` | `sid`, `result`, `warp?` {g,n,x,y} | session over; optional respawn/return warp |
 | `warp` | `g,n,x,y` | teleport instruction (tp/pvp/whiteout) |

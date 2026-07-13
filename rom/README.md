@@ -59,9 +59,10 @@ Makefile globs `src/*.c`).
 | Flag/var report + remote apply with reentrancy guard | ✅ complete (`net_flags.c`) |
 | Server-driven warps (teleport, regroup) applied on safe frames | ✅ complete (`net_warp.c`) |
 | Party summaries, battle session bookkeeping, shared-seed RNG on start | ✅ complete (`net_battle.c`) |
+| **Full-party transfer & merged-party injection** — 32-byte wire mons (PROTOCOL §1.5) sent on change; server-merged party staged via BATTLE_CMD PARTY, injected into `gPlayerParty` at co-op START (original party backed up), restored at END | ✅ complete (`net_battle.c`) |
 | **Ghost rendering** — a sprite per remote player in the overworld | ✅ complete (`net_overworld.c`): camera-tracked player sprites (Brendan/May by slot), facing anims, map-scoped spawn/despawn, stale-id invalidation across map loads. Tile-snapped; movement interpolation is Phase-1 polish |
 | **Battle join window** — encounters announce to peers | ✅ hooks in `DoStandardWildBattle` (wild) and `BattleSetup_StartTrainerBattle` (trainer) via setup.sh |
-| **Battle lockstep** — merged-party injection, relayed turn inputs into battle controllers, bag scoping | 🚧 Phase 3 (`docs/ROADMAP.md`); the messages and session state are already plumbed |
+| **Battle lockstep** — relayed turn inputs into battle controllers, bag scoping | 🚧 Phase 3 (`docs/ROADMAP.md`); messages, session state, seeding, and party injection are already in place |
 
 ## Symbol-drift note
 

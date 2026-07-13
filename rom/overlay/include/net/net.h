@@ -12,9 +12,14 @@ void NetTick(void);
 void NetOnFlagSet(u16 flagId);
 void NetOnVarSet(u16 varId, u16 value);
 
-// battle_setup.c hook (Phase 1.5+) — call when a battle is being set up,
-// before the transition starts, so peers get a join window.
+// battle_setup.c hook — call when a battle is being set up, before the
+// transition starts, so peers get a join window.
 void NetOnBattleOpen(u8 kind, u16 opponent);
+
+// Party sync (net_battle.c): summaries + full 32-byte wire mons are sent
+// automatically on change; call these to force a send.
+void NetSendPartySummary(void);
+void NetSendFullParty(void);
 
 // Ghost state for other players (net_overworld.c owns rendering in Phase 1).
 struct NetGhost

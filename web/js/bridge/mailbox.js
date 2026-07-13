@@ -22,6 +22,7 @@ export const T = {
   VAR_SET: 0x03,
   PARTY_SUMMARY: 0x05,
   REQUEST: 0x06,
+  PARTY_FULL: 0x07,
   BATTLE_EVENT: 0x10,
   HELLO: 0x7f,
   // Host → game
@@ -35,6 +36,7 @@ export const T = {
 
 export const GAME_STATE = { BOOT: 0, OVERWORLD: 1, BATTLE: 2, MENU: 3, OTHER: 4 };
 export const DESPAWN = 255;
+export const MON_WIRE_SIZE = 32; // §1.5 wire mon (level lives at byte 20)
 
 /**
  * Scan a byte view for the mailbox magic at 4-byte-aligned offsets.
@@ -157,6 +159,8 @@ export const enc = {
   varApply: (id, v) => Uint8Array.from([id & 0xff, id >> 8, v & 0xff, v >> 8]),
   warp: (g, n, x, y) => Uint8Array.from([g, n, ...s16(x), ...s16(y)]),
   assign: (slot) => Uint8Array.from([slot]),
+  partyFull: (monBytes) => Uint8Array.from([monBytes.length, ...monBytes.flat()]),
+  battleParty: (wireMons) => Uint8Array.from([4, wireMons.length, ...wireMons.flat()]),
   battleStart: (seed, order, mode) =>
     Uint8Array.from([
       1,
@@ -183,6 +187,14 @@ export const dec = {
     return mons;
   },
   request: (p) => ({ sub: p[0], arg: p[1] }),
+  partyFull: (p) => {
+    const mons = [];
+    for (let i = 0; i < p[0]; i++) {
+      const b = [...p.slice(1 + i * MON_WIRE_SIZE, 1 + (i + 1) * MON_WIRE_SIZE)];
+      mons.push({ lv: b[20], b });
+    }
+    return mons;
+  },
   battleEvent: (p) => {
     switch (p[0]) {
       case 1: return { sub: 'encounter', kind: p[1], opp: readU16(p, 2) };
@@ -203,6 +215,13 @@ export const dec = {
       }
       case 2: return { sub: 'input', turn: p[1], from: p[2], a: p[3], move: p[4], tgt: p[5], x: readU16(p, 6) };
       case 3: return { sub: 'end', result: p[1] };
+      case 4: {
+        const mons = [];
+        for (let i = 0; i < p[1]; i++) {
+          mons.push([...p.slice(2 + i * MON_WIRE_SIZE, 2 + (i + 1) * MON_WIRE_SIZE)]);
+        }
+        return { sub: 'party', mons };
+      }
       default: return { sub: 'unknown' };
     }
   },
