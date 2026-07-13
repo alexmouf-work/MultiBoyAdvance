@@ -1,0 +1,13 @@
+{
+  "name": "multiboyadvance-e2e",
+  "version": "0.1.0",
+  "private": true,
+  "description": "End-to-end demo-mode test: two headless browsers against a live server",
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  },
+  "dependencies": {
+    "playwright": "^1.61.0"
+  }
+}

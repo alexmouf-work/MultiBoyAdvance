@@ -54,12 +54,25 @@ export class Bridge {
     this.#box.attach(mem, this.#box.base); // heap may have been replaced
 
     for (const rec of this.#box.readOut()) this.#gameToWire(rec);
+    this.#flushPendingPos();
 
     while (this.#inQueue.length) {
       const { type, payload } = this.#inQueue[0];
       if (!this.#box.writeIn(type, payload)) break; // ring full: retry next frame
       this.#inQueue.shift();
     }
+  }
+
+  /** A move suppressed by the 10/s throttle must still land once the window
+   *  passes — otherwise peers see players stop one tile short. */
+  #flushPendingPos() {
+    const lp = this.#lastPos;
+    if (!lp.pending) return;
+    const now = performance.now();
+    if (now - lp.at < POS_MIN_INTERVAL_MS) return;
+    const p = lp.pending;
+    this.#lastPos = { at: now, key: `${p.g},${p.n},${p.x},${p.y},${p.f},${p.s}`, pending: null };
+    this.#socket.send({ t: 'pos', ...p });
   }
 
   #boxStillValid(mem) {
@@ -86,10 +99,10 @@ export class Bridge {
         const now = performance.now();
         if (key === this.#lastPos.key) break;
         if (now - this.#lastPos.at < POS_MIN_INTERVAL_MS) {
-          this.#lastPos.pending = p; // trailing update sent on next frame past the window
+          this.#lastPos.pending = p; // trailing update flushed by #flushPendingPos
           break;
         }
-        this.#lastPos = { at: now, key };
+        this.#lastPos = { at: now, key, pending: null };
         this.#socket.send({ t: 'pos', ...p });
         break;
       }
