@@ -20,3 +20,13 @@ compile_commands.json
 
 # Claude Code personal settings (per-user approvals; project settings.json IS tracked)
 .claude/settings.local.json
+
+# MultiBoyAdvance stack
+node_modules/
+server/data/
+web/vendor/
+rom/pokeemerald/
+rom/build/
+*.gba
+*.sav
+*.ss[0-9]
