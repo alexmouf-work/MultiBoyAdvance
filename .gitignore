@@ -1,0 +1,19 @@
+/*build*/*
+.vs/*
+.idea
+*.o
+*.so
+*.dll
+*.exe
+.vscode/
+
+# clangd files
+compile_commands.json
+.cache/
+
+# vim swap files
+*.sw?
+*.un~
+
+# mac finder crap
+*.DS_Store

@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<resource xmlns="http://www.wxwidgets.org/wxxrc" version="2.5.3.0">
+  <object class="wxDialog" name="SpeedupConfig">
+    <title>SpeedUp / Turbo Settings</title>
+    <object class="wxBoxSizer">
+      <orient>wxVERTICAL</orient>
+      <object class="sizeritem">
+        <object class="wxStaticText">
+          <label>Speedup Throttle</label>
+          <font>
+            <weight>bold</weight>
+          </font>
+        </object>
+        <flag>wxALL|wxALIGN_CENTRE_HORIZONTAL</flag>
+        <border>5</border>
+      </object>
+      <object class="sizeritem">
+        <object class="wxBoxSizer">
+          <orient>wxVERTICAL</orient>
+          <object class="sizeritem">
+            <flag>wxALL|wxEXPAND</flag>
+            <border>5</border>
+            <object class="wxBoxSizer">
+              <orient>wxHORIZONTAL</orient>
+              <object class="sizeritem">
+                <object class="wxStaticText">
+                  <label>Percent of normal:</label>
+                  <size>60,-1d</size>
+                </object>
+                <flag>wxALL|wxALIGN_CENTRE_VERTICAL</flag>
+                <border>5</border>
+              </object>
+              <object class="sizeritem">
+                <object class="wxSpinCtrl" name="SpeedupThrottleSpin">
+                  <size>40,-1d</size>
+                </object>
+                <flag>wxALL|wxALIGN_CENTRE_VERTICAL</flag>
+                <border>5</border>
+              </object>
+            </object>
+          </object>
+        </object>
+        <flag>wxALL|wxEXPAND</flag>
+        <border>5</border>
+      </object>
+      <object class="sizeritem">
+        <object class="wxFlexGridSizer">
+          <rows>1</rows>
+          <cols>2</cols>
+          <growablerows>0</growablerows>
+          <growablecols>0,1</growablecols>
+          <object class="sizeritem">
+            <object class="wxCheckBox" name="SpeedupThrottleFrameSkip">
+              <label>Frame skip</label>
+            </object>
+            <flag>wxALL</flag>
+            <border>5</border>
+          </object>
+          <object class="sizeritem">
+            <object class="wxCheckBox" name="SpeedupMute">
+              <label>Mute Sound</label>
+            </object>
+            <flag>wxALL</flag>
+            <border>5</border>
+          </object>
+        </object>
+        <flag>wxALL|wxEXPAND</flag>
+        <border>5</border>
+      </object>
+      <object class="sizeritem">
+        <object class="wxFlexGridSizer">
+          <rows>1</rows>
+          <cols>2</cols>
+          <growablerows>0</growablerows>
+          <growablecols>0,1</growablecols>
+          <object class="sizeritem">
+            <object class="wxButton" name="wxID_OK"/>
+            <flag>wxALL</flag>
+            <border>10</border>
+          </object>
+          <object class="sizeritem">
+            <object class="wxButton" name="wxID_CANCEL"/>
+            <flag>wxALL|wxALIGN_RIGHT</flag>
+            <border>10</border>
+          </object>
+        </object>
+        <flag>wxALL|wxEXPAND</flag>
+        <border>10</border>
+      </object>
+    </object>
+  </object>
+</resource>

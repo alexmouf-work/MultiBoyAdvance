@@ -1,0 +1,755 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<resource xmlns="http://www.wxwidgets.org/wxxrc" version="2.5.3.0">
+  <object class="wxMenuBar" name="MainMenu" subclass="ShortcutMenuBar">
+    <object class="wxMenu">
+      <label>_File</label>
+      <object class="wxMenuItem" name="wxID_OPEN">
+        <label>Open...</label>
+      </object>
+      <object class="wxMenuItem" name="OpenGB">
+        <label>Open _Game Boy...</label>
+      </object>
+      <object class="wxMenuItem" name="OpenGBC">
+        <label>Open Game Boy _Color...</label>
+      </object>
+      <object class="wxMenu" name="RecentMenu">
+        <label>Open rece_nt</label>
+        <object class="wxMenuItem" name="RecentReset">
+          <label>_Reset recent list</label>
+        </object>
+        <object class="wxMenuItem" name="RecentFreeze">
+          <label>_Freeze recent list</label>
+          <checkable>1</checkable>
+        </object>
+      </object>
+      <object class="wxMenuItem" name="RomInformation">
+        <label>ROM in_formation...</label>
+      </object>
+      <object class="separator"/>
+      <object class="wxMenu">
+        <label>_e-Reader</label>
+        <object class="wxMenuItem" name="ResetLoadingDotCodeFile">
+          <label>_Reset Loading Dot Code</label>
+        </object>
+        <object class="wxMenuItem" name="SetLoadingDotCodeFile">
+          <label>_Load Dot Code...</label>
+        </object>
+        <object class="wxMenuItem" name="ResetSavingDotCodeFile">
+          <label>_Reset Saving Dot Code</label>
+        </object>
+        <object class="wxMenuItem" name="SetSavingDotCodeFile">
+          <label>_Save Dot Code...</label>
+        </object>
+      </object>
+      <object class="separator"/>
+      <object class="wxMenu">
+        <object class="wxMenuItem" name="LoadGameRecent">
+          <label>Most _recent</label>
+        </object>
+        <object class="wxMenuItem" name="LoadGameSlot">
+          <label>Load current state slot</label>
+        </object>
+        <object class="wxMenuItem" name="LoadGameAutoLoad">
+          <label>_Auto load most recent</label>
+          <checkable>1</checkable>
+        </object>
+        <object class="separator"/>
+        <object class="wxMenuItem" name="LoadGame01">
+          <label translate="0">_1</label>
+        </object>
+        <object class="wxMenuItem" name="LoadGame02">
+          <label translate="0">_2</label>
+        </object>
+        <object class="wxMenuItem" name="LoadGame03">
+          <label translate="0">_3</label>
+        </object>
+        <object class="wxMenuItem" name="LoadGame04">
+          <label translate="0">_4</label>
+        </object>
+        <object class="wxMenuItem" name="LoadGame05">
+          <label translate="0">_5</label>
+        </object>
+        <object class="wxMenuItem" name="LoadGame06">
+          <label translate="0">_6</label>
+        </object>
+        <object class="wxMenuItem" name="LoadGame07">
+          <label translate="0">_7</label>
+        </object>
+        <object class="wxMenuItem" name="LoadGame08">
+          <label translate="0">_8</label>
+        </object>
+        <object class="wxMenuItem" name="LoadGame09">
+          <label translate="0">_9</label>
+        </object>
+        <object class="wxMenuItem" name="LoadGame10">
+          <label translate="0">1_0</label>
+        </object>
+        <object class="separator"/>
+        <object class="wxMenuItem" name="Load">
+          <label>From _File...</label>
+        </object>
+        <object class="separator"/>
+        <object class="wxMenuItem" name="KeepSaves">
+          <label>Do not change _battery save</label>
+          <checkable>1</checkable>
+        </object>
+        <object class="wxMenuItem" name="KeepCheats">
+          <label>Do not change _cheat list</label>
+          <checkable>1</checkable>
+        </object>
+        <label>_Load state</label>
+      </object>
+      <object class="wxMenu">
+        <object class="wxMenuItem" name="SaveGameOldest">
+          <label>_Oldest slot</label>
+        </object>
+        <object class="wxMenuItem" name="SaveGameSlot">
+          <label>Save current state slot</label>
+        </object>
+        <object class="wxMenuItem" name="IncrGameSlotSave">
+          <label>Increase state slot number and save</label>
+        </object>
+        <object class="separator"/>
+        <object class="wxMenuItem" name="SaveGame01">
+          <label translate="0">_1</label>
+        </object>
+        <object class="wxMenuItem" name="SaveGame02">
+          <label>_2</label>
+        </object>
+        <object class="wxMenuItem" name="SaveGame03">
+          <label>_3</label>
+        </object>
+        <object class="wxMenuItem" name="SaveGame04">
+          <label>_4</label>
+        </object>
+        <object class="wxMenuItem" name="SaveGame05">
+          <label>_5</label>
+        </object>
+        <object class="wxMenuItem" name="SaveGame06">
+          <label>_6</label>
+        </object>
+        <object class="wxMenuItem" name="SaveGame07">
+          <label>_7</label>
+        </object>
+        <object class="wxMenuItem" name="SaveGame08">
+          <label>_8</label>
+        </object>
+        <object class="wxMenuItem" name="SaveGame09">
+          <label>_9</label>
+        </object>
+        <object class="wxMenuItem" name="SaveGame10">
+          <label>1_0</label>
+        </object>
+        <object class="separator"/>
+        <object class="wxMenuItem" name="Save">
+          <label>To _File...</label>
+        </object>
+        <label>_Save state</label>
+      </object>
+      <object class="wxMenuItem" name="IncrGameSlot">
+        <label>Increase state slot number</label>
+      </object>
+      <object class="wxMenuItem" name="DecrGameSlot">
+        <label>Decrease state slot number</label>
+      </object>
+      <object class="separator"/>
+      <object class="wxMenu">
+        <object class="wxMenuItem" name="ImportBatteryFile">
+          <label>_Battery file...</label>
+        </object>
+        <object class="wxMenuItem" name="ImportGamesharkCodeFile">
+          <label>Game Shark _code file...</label>
+        </object>
+        <object class="wxMenuItem" name="ImportGamesharkActionReplaySnapshot">
+          <label>_Game Shark snapshot...</label>
+        </object>
+        <label>_Import</label>
+      </object>
+      <object class="wxMenu">
+        <object class="wxMenuItem" name="ExportBatteryFile">
+          <label>_Battery file...</label>
+        </object>
+        <object class="wxMenuItem" name="ExportGamesharkSnapshot">
+          <label>_Game Shark snapshot...</label>
+        </object>
+        <label>_Export</label>
+      </object>
+      <object class="separator"/>
+      <object class="wxMenuItem" name="ScreenCapture">
+        <label>Screen capt_ure...</label>
+      </object>
+      <object class="wxMenu">
+        <object class="wxMenuItem" name="RecordSoundStartRecording">
+          <label>Start _sound recording...</label>
+        </object>
+        <object class="wxMenuItem" name="RecordSoundStopRecording">
+          <label>Stop s_ound recording</label>
+        </object>
+        <object class="wxMenuItem" name="RecordAVIStartRecording">
+          <label>Start _video recording...</label>
+        </object>
+        <object class="wxMenuItem" name="RecordAVIStopRecording">
+          <label>Stop v_ideo recording</label>
+        </object>
+        <object class="wxMenuItem" name="RecordMovieStartRecording">
+          <label>Start _game recording...</label>
+        </object>
+        <object class="wxMenuItem" name="RecordMovieStopRecording">
+          <label>Stop g_ame recording</label>
+        </object>
+        <label>_Record</label>
+      </object>
+      <object class="wxMenu">
+        <object class="wxMenuItem" name="PlayMovieStartPlaying">
+          <label>Start playing _movie...</label>
+        </object>
+        <object class="wxMenuItem" name="PlayMovieStopPlaying">
+          <label>Stop playing m_ovie</label>
+        </object>
+        <label>_Play</label>
+      </object>
+      <object class="separator"/>
+      <object class="wxMenuItem" name="wxID_CLOSE"/>
+      <object class="wxMenuItem" name="wxID_EXIT">
+        <label>_Quit</label>
+      </object>
+    </object>
+    <object class="wxMenu">
+      <label>_Emulation</label>
+      <object class="wxMenuItem" name="Pause">
+        <label>_Pause</label>
+        <checkable>1</checkable>
+      </object>
+      <object class="wxMenuItem" name="NextFrame">
+        <label>_Next frame</label>
+      </object>
+      <object class="wxMenuItem" name="Rewind">
+        <label>Re_wind</label>
+      </object>
+      <object class="separator"/>
+      <object class="wxMenuItem" name="ToggleFullscreen">
+        <label>Toggle _full screen</label>
+        <bitmap platform="unix" stock_id="gtk-fullscreen"/>
+        <accel platform="win|unix">F11</accel>
+        <accel platform="mac">RawCtrl+Ctrl+F</accel>
+      </object>
+      <object class="separator"/>
+      <object class="wxMenuItem" name="EmulatorSpeedupToggle">
+        <label>_Turbo mode</label>
+        <checkable>1</checkable>
+      </object>
+      <object class="wxMenuItem" name="VSync">
+        <label>_VSync</label>
+        <checkable>1</checkable>
+      </object>
+      <object class="wxMenuItem" name="FrameSkipAuto">
+        <label>_Auto skip frames</label>
+        <checkable>1</checkable>
+      </object>
+      <object class="separator"/>
+      <object class="wxMenuItem" name="SkipIntro">
+        <label>_Skip BIOS</label>
+        <checkable>1</checkable>
+      </object>
+      <object class="wxMenuItem" name="ApplyPatches">
+        <label>_Auto IPS / UPS / IPF patch</label>
+        <checkable>1</checkable>
+      </object>
+      <object class="wxMenuItem" name="PauseWhenInactive">
+        <label>_Pause when inactive</label>
+        <checkable>1</checkable>
+      </object>
+      <object class="separator"/>
+      <object class="wxMenuItem" name="Reset">
+        <label>_Reset</label>
+      </object>
+    </object>
+    <object class="wxMenu">
+      <label>_Options</label>
+      <object class="wxMenu" name="LinkMenu">
+        <label>_Link</label>
+        <object class="wxMenuItem" name="LanLink">
+          <label>Start _Network Link...</label>
+        </object>
+        <object class="wxMenu">
+          <label>_Type</label>
+          <object class="wxMenuItem" name="LinkType0Nothing">
+            <label>_Nothing</label>
+            <checkable>1</checkable>
+          </object>
+          <object class="wxMenuItem" name="LinkType1Cable">
+            <label>_Cable</label>
+            <checkable>1</checkable>
+          </object>
+          <object class="wxMenuItem" name="LinkType2Wireless">
+            <label>_Wireless</label>
+            <checkable>1</checkable>
+          </object>
+          <object class="wxMenuItem" name="LinkType3GameCube">
+            <label translate="0">_Game Cube</label>
+            <checkable>1</checkable>
+          </object>
+          <object class="wxMenuItem" name="LinkType4Gameboy">
+            <label translate="0">_Game Boy</label>
+            <checkable>1</checkable>
+          </object>
+        </object>
+        <object class="wxMenuItem" name="LinkProto">
+          <label>_Local mode</label>
+          <checkable>1</checkable>
+        </object>
+        <object class="wxMenuItem" name="LinkAuto">
+          <label>_Link at boot</label>
+          <checkable>1</checkable>
+        </object>
+        <object class="wxMenuItem" name="SpeedOn">
+          <label>_Speed hack</label>
+          <checkable>1</checkable>
+        </object>
+        <object class="wxMenuItem" name="LinkConfigure">
+          <label>_Configure...</label>
+        </object>
+      </object>
+      <object class="wxMenu">
+        <label>_Video</label>
+        <object class="wxMenuItem" name="DisplayConfigure">
+          <label>_Configure...</label>
+        </object>
+        <object class="separator"/>
+        <object class="wxMenuItem" name="Fullscreen">
+          <label>_Start in full screen</label>
+          <checkable>1</checkable>
+        </object>
+        <object class="wxMenu">
+          <label>_Scaled resize</label>
+          <object class="wxMenuItem" name="SetSize1x">
+            <label>_1x</label>
+          </object>
+          <object class="wxMenuItem" name="SetSize2x">
+            <label>_2x</label>
+          </object>
+          <object class="wxMenuItem" name="SetSize3x">
+            <label>_3x</label>
+          </object>
+          <object class="wxMenuItem" name="SetSize4x">
+            <label>_4x</label>
+          </object>
+          <object class="wxMenuItem" name="SetSize5x">
+            <label>_5x</label>
+          </object>
+          <object class="wxMenuItem" name="SetSize6x">
+            <label>_6x</label>
+          </object>
+        </object>
+        <object class="wxMenuItem" name="ChangeFilter">
+          <label>Change pixel filter</label>
+        </object>
+        <object class="wxMenuItem" name="ChangeIFB">
+          <label>Change interframe blending</label>
+        </object>
+        <object class="wxMenuItem" name="RetainAspect">
+          <label>_Retain aspect ratio</label>
+          <checkable>1</checkable>
+        </object>
+        <object class="separator"/>
+        <object class="wxMenuItem" name="Bilinear">
+          <label>_Bilinear filter</label>
+          <checkable>1</checkable>
+        </object>
+<!--
+        <object class="wxMenuItem" name="Multithread">
+          <label>_Multithread filter</label>
+          <checkable>1</checkable>
+        </object>
+-->
+        <object class="separator"/>
+        <object class="wxMenuItem" name="KeepOnTop">
+          <label>_Keep window on top</label>
+          <checkable>1</checkable>
+        </object>
+        <object class="separator"/>
+        <object class="wxMenuItem" name="NoStatusMsg">
+          <label>_Disable on-screen display</label>
+          <checkable>1</checkable>
+        </object>
+        <object class="wxMenuItem" name="Transparent">
+          <label>_Transparent on-screen display</label>
+          <checkable>1</checkable>
+        </object>
+      </object>
+      <object class="wxMenu">
+        <label>_Audio</label>
+        <object class="wxMenuItem" name="SoundConfigure">
+          <label>_Configure...</label>
+        </object>
+        <object class="wxMenuItem" name="IncreaseVolume">
+          <label>_Increase volume</label>
+        </object>
+        <object class="wxMenuItem" name="DecreaseVolume">
+          <label>_Decrease volume</label>
+        </object>
+        <object class="wxMenuItem" name="ToggleSound">
+          <label>_Toggle sound</label>
+          <checkable>0</checkable>
+        </object>
+        <object class="separator"/>
+        <object class="wxMenuItem" name="GBASoundInterpolation">
+          <label>_Game Boy Advance sound interpolation</label>
+          <checkable>1</checkable>
+        </object>
+        <object class="separator"/>
+        <object class="wxMenuItem" name="GBEnhanceSound">
+          <label>_Game Boy sound enhancement</label>
+          <checkable>1</checkable>
+        </object>
+        <object class="wxMenuItem" name="GBSurround">
+          <label>_Game Boy surround sound effect</label>
+          <checkable>1</checkable>
+        </object>
+        <object class="wxMenuItem" name="GBDeclicking">
+          <label>_Game Boy sound declicking</label>
+          <checkable>1</checkable>
+        </object>
+      </object>
+      <object class="wxMenu">
+        <label>_Input</label>
+        <object class="wxMenuItem" name="JoypadConfigure">
+          <label>_Configure...</label>
+        </object>
+        <object class="wxMenuItem" name="AllowKeyboardBackgroundInput">
+          <label>Allow _keyboard background input</label>
+          <checkable>1</checkable>
+        </object>
+        <object class="wxMenuItem" name="AllowJoystickBackgroundInput">
+          <label>Allow _joystick background input</label>
+          <checkable>1</checkable>
+        </object>
+        <object class="separator"/>
+        <object class="wxMenu">
+          <label>_Autofire</label>
+          <object class="wxMenuItem" name="JoypadAutofireA">
+            <label translate="0">_A</label>
+            <checkable>1</checkable>
+          </object>
+          <object class="wxMenuItem" name="JoypadAutofireB">
+            <label translate="0">_B</label>
+            <checkable>1</checkable>
+          </object>
+          <object class="wxMenuItem" name="JoypadAutofireL">
+            <label translate="0">_L</label>
+            <checkable>1</checkable>
+          </object>
+          <object class="wxMenuItem" name="JoypadAutofireR">
+            <label translate="0">_R</label>
+            <checkable>1</checkable>
+          </object>
+        </object>
+        <object class="wxMenu">
+          <label>_Autohold</label>
+          <object class="wxMenuItem" name="JoypadAutoholdUp">
+            <label>Up</label>
+            <checkable>1</checkable>
+          </object>
+          <object class="wxMenuItem" name="JoypadAutoholdDown">
+            <label>Down</label>
+            <checkable>1</checkable>
+          </object>
+          <object class="wxMenuItem" name="JoypadAutoholdLeft">
+            <label>Left</label>
+            <checkable>1</checkable>
+          </object>
+          <object class="wxMenuItem" name="JoypadAutoholdRight">
+            <label>Right</label>
+            <checkable>1</checkable>
+          </object>
+          <object class="wxMenuItem" name="JoypadAutoholdA">
+            <label>_A</label>
+            <checkable>1</checkable>
+          </object>
+          <object class="wxMenuItem" name="JoypadAutoholdB">
+            <label>_B</label>
+            <checkable>1</checkable>
+          </object>
+          <object class="wxMenuItem" name="JoypadAutoholdL">
+            <label>_L</label>
+            <checkable>1</checkable>
+          </object>
+          <object class="wxMenuItem" name="JoypadAutoholdR">
+            <label>_R</label>
+            <checkable>1</checkable>
+          </object>
+          <object class="wxMenuItem" name="JoypadAutoholdSelect">
+            <label>Select</label>
+            <checkable>1</checkable>
+          </object>
+          <object class="wxMenuItem" name="JoypadAutoholdStart">
+            <label>Start</label>
+            <checkable>1</checkable>
+          </object>
+        </object>
+      </object>
+      <object class="wxMenu">
+        <label translate="0">_Game Boy Advance</label>
+        <object class="wxMenuItem" name="GameBoyAdvanceConfigure">
+          <label>Configure...</label>
+        </object>
+        <object class="separator"/>
+        <object class="wxMenuItem" name="RTC">
+          <label>_Real-time clock</label>
+          <checkable>1</checkable>
+        </object>
+        <object class="wxMenuItem" name="BootRomEn">
+          <label>_Use BIOS file</label>
+          <checkable>1</checkable>
+        </object>
+        <object class="wxMenuItem" name="AGBPrinter">
+          <label>_Debug print</label>
+          <checkable>1</checkable>
+        </object>
+        <object class="wxMenuItem" name="GBALcdFilter">
+          <label>_LCD Filter</label>
+          <checkable>1</checkable>
+        </object>
+      </object>
+      <object class="wxMenu">
+        <label translate="0">_Game Boy</label>
+        <object class="wxMenuItem" name="GameBoyConfigure">
+          <label>Configure...</label>
+        </object>
+        <object class="separator"/>
+        <object class="wxMenuItem" name="GBColorOption">
+          <label>_Game Boy color option</label>
+          <checkable>1</checkable>
+        </object>
+        <object class="wxMenuItem" name="GBLcdFilter">
+          <label>_LCD Filter</label>
+          <checkable>1</checkable>
+        </object>
+        <object class="wxMenuItem" name="ColorizerHack">
+          <label>_Game Boy Colorizer Hack (requires restart)</label>
+          <checkable>1</checkable>
+        </object>        
+        <object class="wxMenuItem" name="Printer">
+          <label>_Game Boy printer</label>
+          <checkable>1</checkable>
+        </object>
+        <object class="wxMenuItem" name="PrintGather">
+          <label>_Gather a full page before printing</label>
+          <checkable>1</checkable>
+        </object>
+        <object class="wxMenuItem" name="PrintSnap">
+          <label>_Save printouts as screen captures</label>
+          <checkable>1</checkable>
+        </object>
+        <object class="separator"/>
+        <object class="wxMenuItem" name="BootRomGB">
+          <label>_Use Game Boy BIOS file (requires restart)</label>
+          <checkable>1</checkable>
+        </object>
+        <object class="wxMenuItem" name="BootRomGBC">
+          <label>_Use Game Boy Color BIOS file</label>
+          <checkable>1</checkable>
+        </object>
+      </object>
+        <object class="wxMenuItem" name="GeneralConfigure">
+          <label>_General...</label>
+        </object>
+        <object class="wxMenuItem" name="SpeedupConfigure">
+          <label>_Speedup / Turbo...</label>
+        </object>
+        <object class="wxMenuItem" name="EmulatorDirectories">
+          <label>D_irectories...</label>
+        </object>
+        <object class="wxMenuItem" name="Customize">
+          <label>_Key Shortcuts...</label>
+        </object>
+        <object class="wxMenu" name="UIConfigure">
+          <label>UI Settings</label>
+					<object class="wxMenuItem" name="StatusBar">
+							<label>Enable _Status bar</label>
+							<checkable>1</checkable>
+					</object>
+					<object class="wxMenuItem" name="HideMenuBar">
+							<label>Hide _Menu Bar</label>
+							<checkable>1</checkable>
+					</object>
+					<object class="wxMenuItem" name="SuspendScreenSaver">
+							<label>Suspend _Screen Saver</label>
+							<checkable>1</checkable>
+					</object>
+        </object>
+    </object>
+    <object class="wxMenu">
+      <label>_Tools</label>
+      <object class="wxMenu">
+        <label>_Cheats</label>
+        <object class="wxMenuItem" name="CheatsList">
+          <label>List _cheats...</label>
+        </object>
+        <object class="wxMenuItem" name="CheatsSearch">
+          <label>Find c_heat...</label>
+        </object>
+        <object class="separator"/>
+        <object class="wxMenuItem" name="CheatsAutoSaveLoad">
+          <label>A_utomatically save / load cheats</label>
+          <checkable>1</checkable>
+        </object>
+        <object class="wxMenuItem" name="CheatsEnable">
+          <label>_Enable cheats</label>
+          <checkable>1</checkable>
+        </object>
+      </object>
+      <object class="separator"/>
+      <object class="wxMenu" name="GDBMenu">
+        <object class="wxMenuItem" name="DebugGDBBreak">
+          <label>_Break into GDB</label>
+        </object>
+        <object class="separator"/>
+        <object class="wxMenuItem" name="DebugGDBPort">
+          <label>_Configure port...</label>
+        </object>
+        <object class="wxMenuItem" name="DebugGDBBreakOnLoad">
+          <label>_Break on load</label>
+          <checkable>1</checkable>
+        </object>
+        <object class="separator"/>
+        <object class="wxMenuItem" name="DebugGDBDisconnect">
+          <label>_Disconnect</label>
+        </object>
+        <label translate="0">_GDB</label>
+      </object>
+      <object class="wxMenuItem" name="Disassemble">
+        <label>_Disassemble...</label>
+      </object>
+      <object class="wxMenuItem" name="Logging">
+        <label>_Logging...</label>
+      </object>
+      <object class="wxMenuItem" name="IOViewer">
+        <label>_IO Viewer...</label>
+      </object>
+      <object class="wxMenuItem" name="MapViewer">
+        <label>&amp;Map Viewer...</label>
+      </object>
+      <object class="wxMenuItem" name="MemoryViewer">
+        <label>M_emory Viewer...</label>
+      </object>
+      <object class="wxMenuItem" name="OAMViewer">
+        <label>_OAM Viewer...</label>
+      </object>
+      <object class="wxMenuItem" name="PaletteViewer">
+        <label>_Palette Viewer...</label>
+      </object>
+      <object class="wxMenuItem" name="TileViewer">
+        <label>_Tile Viewer...</label>
+      </object>
+      <object class="separator"/>
+      <object class="wxMenu">
+        <object class="wxMenuItem" name="VideoLayersReset">
+          <label>Show all video layers</label>
+        </object>
+        <object class="separator"/>
+        <object class="wxMenuItem" name="VideoLayersBG0">
+          <label translate="0">BG _0</label>
+          <checkable>1</checkable>
+          <checked>1</checked>
+        </object>
+        <object class="wxMenuItem" name="VideoLayersBG1">
+          <label translate="0">BG _1</label>
+          <checkable>1</checkable>
+          <checked>1</checked>
+        </object>
+        <object class="wxMenuItem" name="VideoLayersBG2">
+          <label translate="0">BG _2</label>
+          <checkable>1</checkable>
+          <checked>1</checked>
+        </object>
+        <object class="wxMenuItem" name="VideoLayersBG3">
+          <label translate="0">BG _3</label>
+          <checkable>1</checkable>
+          <checked>1</checked>
+        </object>
+        <object class="wxMenuItem" name="VideoLayersOBJ">
+          <label translate="0">_OBJ</label>
+          <checkable>1</checkable>
+          <checked>1</checked>
+        </object>
+        <object class="wxMenuItem" name="VideoLayersWIN0">
+          <label translate="0">_WIN 0</label>
+          <checkable>1</checkable>
+          <checked>1</checked>
+        </object>
+        <object class="wxMenuItem" name="VideoLayersWIN1">
+          <label translate="0">W_IN 1</label>
+          <checkable>1</checkable>
+          <checked>1</checked>
+        </object>
+        <object class="wxMenuItem" name="VideoLayersOBJWIN">
+          <label translate="0">O_BJ WIN</label>
+          <checkable>1</checkable>
+          <checked>1</checked>
+        </object>
+        <label>_View Layers</label>
+      </object>
+      <object class="wxMenu">
+        <object class="wxMenuItem" name="SoundChannel1">
+          <label>Channel _1</label>
+          <checkable>1</checkable>
+          <checked>1</checked>
+        </object>
+        <object class="wxMenuItem" name="SoundChannel2">
+          <label>Channel _2</label>
+          <checkable>1</checkable>
+          <checked>1</checked>
+        </object>
+        <object class="wxMenuItem" name="SoundChannel3">
+          <label>Channel _3</label>
+          <checkable>1</checkable>
+          <checked>1</checked>
+        </object>
+        <object class="wxMenuItem" name="SoundChannel4">
+          <label>Channel _4</label>
+          <checkable>1</checkable>
+          <checked>1</checked>
+        </object>
+        <object class="wxMenuItem" name="DirectSoundA">
+          <label>Direct Sound _A</label>
+          <checkable>1</checkable>
+          <checked>1</checked>
+        </object>
+        <object class="wxMenuItem" name="DirectSoundB">
+          <label>Direct Sound _B</label>
+          <checkable>1</checkable>
+          <checked>1</checked>
+        </object>
+        <label>_Sound Channels</label>
+      </object>
+    </object>
+    <object class="wxMenu">
+      <label>_Help</label>
+      <object class="wxMenuItem" name="BugReport">
+        <label>Report _Bugs</label>
+      </object>
+      <object class="wxMenuItem" name="FAQ">
+        <label>Visual Boy Advance-M Support _Forum</label>
+      </object>
+      <object class="wxMenuItem" name="Translate">
+        <label>Translations</label>
+      </object>
+      <!-- FIXME: turn this back on when Sparkle is implemented
+      <object class="wxMenuItem" name="UpdateRDB">
+        <label>Update ROM database</label>
+      </object>
+      -->
+      <object class="wxMenuItem" name="UpdateEmu">
+        <label>Check for updates</label>
+      </object>
+      <object class="wxMenuItem" name="FactoryReset">
+        <label>_Factory Reset...</label>
+      </object>
+      <object class="separator"/>
+      <object class="wxMenuItem" name="wxID_ABOUT">
+        <label>_About...</label>
+      </object>
+    </object>
+  </object>
+</resource>
