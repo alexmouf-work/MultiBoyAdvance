@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  server-and-web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Server tests
+        working-directory: server
+        run: |
+          npm install --no-audit --no-fund
+          npm test
+      - name: Web codec tests
+        working-directory: web
+        run: |
+          npm install --no-audit --no-fund
+          npm test
+
+  e2e-demo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install deps
+        run: |
+          cd server && npm install --no-audit --no-fund
+          cd ../web && npm install --no-audit --no-fund
+          cd ../e2e && npm install --no-audit --no-fund
+      - name: Install Chromium
+        working-directory: e2e
+        run: npx playwright install --with-deps chromium
+      - name: E2E (demo mode; real-ROM test skips without a built ROM)
+        working-directory: e2e
+        run: npm test
+
+  rom-overlay-syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: ARM cross-compiler
+        run: sudo apt-get update && sudo apt-get install -y gcc-arm-none-eabi
+      # Full ROM builds need the pokeemerald clone; CI checks the overlay
+      # compiles as ARM C against the stub contract instead (fast, no assets).
+      - name: Overlay syntax check (arm-none-eabi)
+        run: bash rom/ci-syntax-check.sh
