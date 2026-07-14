@@ -50,13 +50,17 @@ popd
 echo [2/6] Dependencies installed. OK.
 
 :: ---------- [3/6] verify with the server test suite ----------
-echo [3/6] Running server tests...
+echo [3/6] Running server tests (normally ^<10 seconds)...
+echo       NOTE: clicking inside this window pauses it (Windows QuickEdit).
+echo       If it looks frozen and the title bar says "Select", press Esc.
 pushd server
-call npm test >nul 2>&1
+call npm test > "%TEMP%\mba-server-tests.log" 2>&1
 if errorlevel 1 (
     popd
-    echo   Server tests FAILED. Something is wrong with this checkout or
-    echo   your Node installation. Run "cd server && npm test" to see details.
+    echo   Server tests FAILED. Last 25 lines of %TEMP%\mba-server-tests.log:
+    echo   ------------------------------------------------------------
+    powershell -NoProfile -Command "Get-Content -Tail 25 \"$env:TEMP\mba-server-tests.log\""
+    echo   ------------------------------------------------------------
     pause
     exit /b 1
 )

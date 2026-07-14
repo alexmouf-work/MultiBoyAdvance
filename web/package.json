@@ -7,7 +7,7 @@
   "scripts": {
     "vendor": "node vendor.js",
     "postinstall": "node vendor.js",
-    "test": "node --test"
+    "test": "node --test --test-force-exit"
   },
   "dependencies": {
     "@thenick775/mgba-wasm": "^2.4.1"
