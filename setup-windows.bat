@@ -4,7 +4,7 @@ title MultiBoyAdvance setup
 cd /d "%~dp0"
 
 echo ============================================================
-echo  MultiBoyAdvance - one-shot Windows setup  (script v3)
+echo  MultiBoyAdvance - one-shot Windows setup  (script v4)
 echo  Steps: admin check / self-update / Node.js / dependencies /
 echo         tests / ROM build (optional, WSL2) / firewall / launch
 echo ============================================================
@@ -21,19 +21,37 @@ echo [0/6] Running as administrator. OK.
 
 :: ---------- [0.5/6] self-update so fixes land without manual git pull ----------
 where git >nul 2>&1
+if errorlevel 1 (
+    echo [0.5/6] WARNING: git is not installed - the script cannot self-update.
+    echo         Fixes pushed to the repo will NOT reach this machine.
+    goto node_step
+)
+git rev-parse --is-inside-work-tree >nul 2>&1
+if errorlevel 1 (
+    echo [0.5/6] WARNING: this folder is NOT a git checkout - probably a ZIP
+    echo         download. The script cannot self-update. Please re-get the
+    echo         project with:  git clone https://github.com/alexmouf-work/MultiBoyAdvance
+    goto node_step
+)
+for /f "delims=" %%c in ('git rev-parse --short HEAD') do echo [0.5/6] Local version: commit %%c
+git pull --ff-only > "%TEMP%\mba-pull.log" 2>&1
+type "%TEMP%\mba-pull.log"
+findstr /C:"Updating" "%TEMP%\mba-pull.log" >nul
 if not errorlevel 1 (
-    git pull --ff-only 2>nul | findstr /C:"Updating" >nul
-    if not errorlevel 1 (
-        echo [0.5/6] Repo updated from origin - restarting with the new script...
-        echo.
-        "%~f0"
-        exit /b
-    )
-    echo [0.5/6] Repo is up to date. OK.
+    echo [0.5/6] Updated from origin - restarting with the new script...
+    echo.
+    "%~f0"
+    exit /b
+)
+findstr /I /C:"error" /C:"fatal" "%TEMP%\mba-pull.log" >nul
+if not errorlevel 1 (
+    echo [0.5/6] WARNING: git pull FAILED - see the message above. Continuing
+    echo         with the local version, which may be outdated.
 ) else (
-    echo [0.5/6] git not found - skipping self-update.
+    echo [0.5/6] Repo is up to date. OK.
 )
 
+:node_step
 :: ---------- [1/6] Node.js ----------
 where node >nul 2>&1
 if not errorlevel 1 goto node_ok
@@ -97,23 +115,29 @@ if errorlevel 2 (
 wsl -e /bin/true >nul 2>&1
 if not errorlevel 1 goto wsl_ready
 
-echo       No working WSL distribution found. Setting one up automatically:
+echo       No working WSL distribution found. Setting one up automatically.
 echo       - updating the WSL platform...
-wsl --update >nul 2>&1
+wsl --update
 echo       - distributions available online:
-wsl --list --online 2>nul
+wsl --list --online
 echo.
-echo       - installing Ubuntu (one time, ~2 GB download, no prompts)...
-wsl --install -d Ubuntu --no-launch 2>nul
+echo       - installing Ubuntu, attempt 1: no-launch install...
+wsl --install -d Ubuntu --no-launch
 if errorlevel 1 (
-    echo         --no-launch not supported by this wsl.exe; retrying plain install...
+    echo       - attempt 2: plain install...
     wsl --install -d Ubuntu
 )
-:: Initialize headlessly (as root; no username prompt needed for building).
+wsl -e /bin/true >nul 2>&1
+if not errorlevel 1 goto wsl_ready
+echo       - attempt 3: direct download, bypassing the Microsoft Store...
+wsl --install -d Ubuntu --web-download
+echo.
+echo       - distributions now registered on this machine:
+wsl --list --verbose
+:: Initialize headlessly (as root; no username prompt needed for building),
+:: accepting either the name "Ubuntu" or whatever the default distro is.
 wsl -d Ubuntu -u root -- true >nul 2>&1
 if not errorlevel 1 goto wsl_ready
-:: Maybe the distro registered under a versioned name (e.g. Ubuntu-24.04):
-:: fall back to whatever the default distro is now.
 wsl -e /bin/true >nul 2>&1
 if not errorlevel 1 goto wsl_ready
 echo.
