@@ -3,7 +3,9 @@
 # overlay, apply the three integration hooks, build with the modern toolchain.
 # Run under Linux or WSL2 (see docs/SETUP-WINDOWS.md). Idempotent.
 set -euo pipefail
-cd "$(dirname "$0")"
+# MBA_ROM_DIR lets Windows launchers run a CR-stripped copy of this script
+# from elsewhere while still operating on the real rom/ directory.
+cd "${MBA_ROM_DIR:-$(dirname "$0")}"
 
 PKE=pokeemerald
 OUT=build

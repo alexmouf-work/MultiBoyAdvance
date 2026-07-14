@@ -13,5 +13,7 @@ if ($romDir -match '^([A-Za-z]):/(.*)$') {
     $romDir = '/mnt/' + $Matches[1].ToLower() + '/' + $Matches[2]
 }
 
-wsl bash -c "cd '$romDir' && ./setup.sh"
+# Run a CR-stripped copy of setup.sh (Windows checkouts may be CRLF, which
+# bash rejects); MBA_ROM_DIR keeps it operating on the real rom/ directory.
+wsl bash -c "cd '$romDir' && mkdir -p build && sed -e 's/\r\$//' setup.sh > build/setup-lf.sh && MBA_ROM_DIR='$romDir' bash build/setup-lf.sh"
 Write-Host '[mba] ROM at rom\build\mba.gba' -ForegroundColor Green
