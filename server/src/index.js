@@ -7,6 +7,7 @@ import http from 'node:http';
 import net from 'node:net';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { config } from './config.js';
 import { World } from './world/world.js';
@@ -144,6 +145,8 @@ export function createServers(cfg = config) {
   };
 }
 
-if (process.argv[1] === new URL(import.meta.url).pathname) {
+// fileURLToPath, not URL.pathname: pathname yields "/C:/..." on Windows and
+// the comparison would never match, so `npm start` would silently exit.
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
   createServers().listen();
 }

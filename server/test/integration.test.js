@@ -4,6 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import net from 'node:net';
+import { fileURLToPath } from 'node:url';
 import WebSocket from 'ws';
 import { createServers } from '../src/index.js';
 
@@ -12,7 +13,8 @@ function testCfg() {
     httpPort: 0,
     tcpPort: 0,
     host: '127.0.0.1',
-    webRoot: new URL('../../web', import.meta.url).pathname,
+    // fileURLToPath, not URL.pathname: pathname yields "/C:/..." on Windows
+    webRoot: fileURLToPath(new URL('../../web', import.meta.url)),
     dataFile: null,
     maxPlayers: 8,
     protocolVersion: 1,
