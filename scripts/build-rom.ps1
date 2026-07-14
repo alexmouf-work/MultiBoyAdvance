@@ -14,6 +14,8 @@ if ($romDir -match '^([A-Za-z]):/(.*)$') {
 }
 
 # Run a CR-stripped copy of setup.sh (Windows checkouts may be CRLF, which
-# bash rejects); MBA_ROM_DIR keeps it operating on the real rom/ directory.
-wsl bash -c "cd '$romDir' && mkdir -p build && sed -e 's/\r\$//' setup.sh > build/setup-lf.sh && MBA_ROM_DIR='$romDir' bash build/setup-lf.sh"
+# bash rejects). Single-quoted format string: PowerShell must not interpolate
+# any of the $ characters bash needs.
+$bashCmd = 'cd "{0}" && mkdir -p build && sed -e ''s/\r$//'' setup.sh > build/setup-lf.sh && MBA_ROM_DIR=. bash build/setup-lf.sh' -f $romDir
+wsl bash -lc $bashCmd
 Write-Host '[mba] ROM at rom\build\mba.gba' -ForegroundColor Green

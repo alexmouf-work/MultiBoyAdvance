@@ -4,7 +4,7 @@ title MultiBoyAdvance setup
 cd /d "%~dp0"
 
 echo ============================================================
-echo  MultiBoyAdvance - one-shot Windows setup  (script v5)
+echo  MultiBoyAdvance - one-shot Windows setup  (script v6)
 echo  Steps: admin check / self-update / Node.js / dependencies /
 echo         tests / ROM build (optional, WSL2) / firewall / launch
 echo ============================================================
@@ -159,7 +159,9 @@ if errorlevel 1 (
 echo       Building the ROM (clones pokeemerald, applies hooks, compiles)...
 :: Run a CR-stripped copy of setup.sh: git on Windows may check the repo out
 :: with CRLF line endings, which bash rejects (env: 'bash\r' not found).
-wsl -- bash -c "R=\"$(wslpath -a '%~dp0rom')\" && cd \"$R\" && mkdir -p build && sed -e 's/\r$//' setup.sh > build/setup-lf.sh && MBA_ROM_DIR=\"$R\" bash build/setup-lf.sh"
+:: NOTE: keep this one 'cd "$(wslpath ...)"' shape - it survives the
+:: cmd->wsl->bash quoting chain; shell variables here do not (script v5 bug).
+wsl -- bash -lc "cd \"$(wslpath -a '%~dp0rom')\" && mkdir -p build && sed -e 's/\r$//' setup.sh > build/setup-lf.sh && MBA_ROM_DIR=. bash build/setup-lf.sh"
 if not exist rom\build\mba.gba (
     echo       ROM build did not produce rom\build\mba.gba. See rom\README.md.
     pause
