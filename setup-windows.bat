@@ -77,16 +77,30 @@ if errorlevel 2 (
     echo       Skipped. Build later with scripts\build-rom.ps1 - demo mode works without it.
     goto firewall
 )
-wsl -l -q >nul 2>&1
+:: Real readiness check: can a distro actually run a command? (wsl.exe exits
+:: 0 even when the platform is installed but no distribution is.)
+wsl -e /bin/true >nul 2>&1
+if not errorlevel 1 goto wsl_ready
+echo       No working WSL distribution found. Installing Ubuntu (one time,
+echo       ~2 GB download, no prompts)...
+wsl --install -d Ubuntu --no-launch
 if errorlevel 1 (
-    echo       WSL2 is not set up. Installing Ubuntu ^(one time^)...
-    wsl --install -d Ubuntu
+    echo       Ubuntu install failed. Run "wsl --install -d Ubuntu" by hand,
+    echo       then re-run setup-windows.bat. See docs\SETUP-WINDOWS.md section 2.
+    pause
+    exit /b 1
+)
+:: Initialize it headlessly (as root; no username prompt needed for building).
+wsl -d Ubuntu -u root -- true >nul 2>&1
+if errorlevel 1 (
     echo.
-    echo       REBOOT REQUIRED. After rebooting, run setup-windows.bat again
-    echo       and the ROM build will continue from here.
+    echo       Ubuntu is installed but Windows needs a REBOOT to finish WSL
+    echo       setup. After rebooting, run setup-windows.bat again - it will
+    echo       skip everything already done and continue from the ROM build.
     pause
     exit /b 0
 )
+:wsl_ready
 echo       Installing build tools inside WSL (no password needed)...
 wsl -u root -- bash -lc "apt-get update -qq && apt-get install -y -qq build-essential git libpng-dev gcc-arm-none-eabi binutils-arm-none-eabi"
 if errorlevel 1 (
