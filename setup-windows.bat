@@ -4,9 +4,9 @@ title MultiBoyAdvance setup
 cd /d "%~dp0"
 
 echo ============================================================
-echo  MultiBoyAdvance - one-shot Windows setup
-echo  Steps: admin check / Node.js / dependencies / tests /
-echo         ROM build (optional, WSL2) / firewall / launch
+echo  MultiBoyAdvance - one-shot Windows setup  (script v3)
+echo  Steps: admin check / self-update / Node.js / dependencies /
+echo         tests / ROM build (optional, WSL2) / firewall / launch
 echo ============================================================
 echo.
 
@@ -18,6 +18,21 @@ if errorlevel 1 (
     exit /b 0
 )
 echo [0/6] Running as administrator. OK.
+
+:: ---------- [0.5/6] self-update so fixes land without manual git pull ----------
+where git >nul 2>&1
+if not errorlevel 1 (
+    git pull --ff-only 2>nul | findstr /C:"Updating" >nul
+    if not errorlevel 1 (
+        echo [0.5/6] Repo updated from origin - restarting with the new script...
+        echo.
+        "%~f0"
+        exit /b
+    )
+    echo [0.5/6] Repo is up to date. OK.
+) else (
+    echo [0.5/6] git not found - skipping self-update.
+)
 
 :: ---------- [1/6] Node.js ----------
 where node >nul 2>&1
@@ -81,25 +96,34 @@ if errorlevel 2 (
 :: 0 even when the platform is installed but no distribution is.)
 wsl -e /bin/true >nul 2>&1
 if not errorlevel 1 goto wsl_ready
-echo       No working WSL distribution found. Installing Ubuntu (one time,
-echo       ~2 GB download, no prompts)...
-wsl --install -d Ubuntu --no-launch
+
+echo       No working WSL distribution found. Setting one up automatically:
+echo       - updating the WSL platform...
+wsl --update >nul 2>&1
+echo       - distributions available online:
+wsl --list --online 2>nul
+echo.
+echo       - installing Ubuntu (one time, ~2 GB download, no prompts)...
+wsl --install -d Ubuntu --no-launch 2>nul
 if errorlevel 1 (
-    echo       Ubuntu install failed. Run "wsl --install -d Ubuntu" by hand,
-    echo       then re-run setup-windows.bat. See docs\SETUP-WINDOWS.md section 2.
-    pause
-    exit /b 1
+    echo         --no-launch not supported by this wsl.exe; retrying plain install...
+    wsl --install -d Ubuntu
 )
-:: Initialize it headlessly (as root; no username prompt needed for building).
+:: Initialize headlessly (as root; no username prompt needed for building).
 wsl -d Ubuntu -u root -- true >nul 2>&1
-if errorlevel 1 (
-    echo.
-    echo       Ubuntu is installed but Windows needs a REBOOT to finish WSL
-    echo       setup. After rebooting, run setup-windows.bat again - it will
-    echo       skip everything already done and continue from the ROM build.
-    pause
-    exit /b 0
-)
+if not errorlevel 1 goto wsl_ready
+:: Maybe the distro registered under a versioned name (e.g. Ubuntu-24.04):
+:: fall back to whatever the default distro is now.
+wsl -e /bin/true >nul 2>&1
+if not errorlevel 1 goto wsl_ready
+echo.
+echo       Ubuntu is installed but not runnable yet - Windows usually needs a
+echo       REBOOT to finish WSL setup. After rebooting, run setup-windows.bat
+echo       again: it skips everything already done and continues from the ROM
+echo       build. If it still fails after a reboot, run "wsl --install -d Ubuntu"
+echo       by hand and see docs\SETUP-WINDOWS.md section 2.
+pause
+exit /b 0
 :wsl_ready
 echo       Installing build tools inside WSL (no password needed)...
 wsl -u root -- bash -lc "apt-get update -qq && apt-get install -y -qq build-essential git libpng-dev gcc-arm-none-eabi binutils-arm-none-eabi"
