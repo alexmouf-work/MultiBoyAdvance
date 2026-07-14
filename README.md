@@ -44,6 +44,12 @@ you use.
 
 ## Quickstart (host)
 
+**Windows 11 (one shot):** double-click **`setup-windows.bat`** — it installs
+Node if needed, sets up dependencies, verifies with the test suite, optionally
+builds the ROM via WSL2, opens the firewall, and starts the server.
+
+Manually (any OS):
+
 ```bash
 cd server
 npm install

@@ -1,5 +1,11 @@
 # Host setup — Windows 11
 
+> **Shortcut:** `setup-windows.bat` in the repo root does everything on this
+> page in one run (elevates itself, installs Node via winget if missing,
+> installs dependencies, runs the server tests, optionally installs WSL2 and
+> builds the ROM, opens the firewall, starts the server). The sections below
+> are the manual equivalent and the reference for troubleshooting.
+
 The host machine runs the server (always) and builds the ROM (once per change).
 Players only need a browser — or desktop mGBA for the Lua path.
 
