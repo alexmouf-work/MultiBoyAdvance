@@ -267,6 +267,13 @@ body.touch #touch { display: block; }
 
 .pad {
   position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  text-transform: uppercase;
+  padding: 0;
+  line-height: 1;
   border-radius: 50%;
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.07);
@@ -361,6 +368,33 @@ body.touch #touch { display: block; }
 }
 #gamewrap.controls-below #left-cluster,
 #gamewrap.controls-below #right-cluster { position: static; }
+
+/* ---- fullscreen options button + panel (hidden outside fullscreen) ---- */
+#btn-options, #options-panel { display: none; }
+#gamewrap:fullscreen #btn-options, #gamewrap.fake-fullscreen #btn-options {
+  display: block;
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  z-index: 60;
+  background: rgba(22, 27, 34, 0.85);
+}
+#gamewrap:fullscreen #options-panel.open, #gamewrap.fake-fullscreen #options-panel.open {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  position: absolute;
+  top: 60px;
+  right: 16px;
+  z-index: 60;
+  background: rgba(22, 27, 34, 0.95);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px;
+  backdrop-filter: blur(8px);
+}
+#options-panel #pad-prefs { flex-direction: column; align-items: stretch; }
+#options-panel #pad-prefs > * { width: 100%; }
 
 /* ============ fullscreen (native or CSS fallback) ============ */
 #gamewrap:fullscreen, #gamewrap.fake-fullscreen {

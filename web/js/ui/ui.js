@@ -138,6 +138,7 @@ export class UI {
 
   #applySpeed(x) {
     this.adapter.setSpeed?.(x);
+    this.adapter.currentSpeed = x; // read by the pulse-press logic
     const btn = document.querySelector('#btn-speed');
     if (btn) btn.textContent = `⚡ ${x}×`;
     for (const b of document.querySelectorAll('#speed-menu button')) {
