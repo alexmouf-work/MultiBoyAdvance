@@ -3,7 +3,11 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import https from 'node:https';
 import net from 'node:net';
+import os from 'node:os';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import WebSocket from 'ws';
 import { createServers } from '../src/index.js';
@@ -11,6 +15,8 @@ import { createServers } from '../src/index.js';
 function testCfg() {
   return {
     httpPort: 0,
+    httpsPort: 0,
+    tlsDir: fs.mkdtempSync(path.join(os.tmpdir(), 'mba-tls-')),
     tcpPort: 0,
     host: '127.0.0.1',
     // fileURLToPath, not URL.pathname: pathname yields "/C:/..." on Windows
@@ -137,6 +143,26 @@ test('http host serves the web client with cross-origin isolation headers', asyn
 
   const evil = await fetch(`http://127.0.0.1:${port}/..%2f..%2fetc%2fpasswd`);
   assert.ok([403, 404].includes(evil.status), `traversal must not serve (got ${evil.status})`);
+
+  srv.close();
+});
+
+test('https server (self-signed) serves the client with isolation headers', async () => {
+  const srv = createServers(testCfg());
+  await srv.listen(); // generates the cert into tlsDir, starts all listeners
+  await new Promise((r) => setTimeout(r, 50)); // let listeners settle
+  assert.ok(srv.httpsServer, 'https server started');
+  const port = srv.httpsServer.address().port;
+
+  const res = await new Promise((resolve, reject) => {
+    https
+      .get({ host: '127.0.0.1', port, path: '/index.html', rejectUnauthorized: false }, resolve)
+      .on('error', reject);
+  });
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.headers['cross-origin-opener-policy'], 'same-origin');
+  assert.equal(res.headers['cross-origin-embedder-policy'], 'require-corp');
+  res.resume();
 
   srv.close();
 });

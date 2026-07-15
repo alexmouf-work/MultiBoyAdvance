@@ -70,11 +70,34 @@ full multiplayer stack (useful to verify networking before ROM work).
 3. Load the netcode ROM. The script log should show `connected` and
    `mailbox found @ 0x02xxxxxx`.
 
-## 5. Internet play (Phase 5)
+## 5. Internet play — real domain, no certificate warnings
 
-Preferred: [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/)
-(`cloudflared tunnel --url http://localhost:8484`) — gives HTTPS (satisfies
-COOP/COEP + secure WebSocket) without router changes. Alternative: port-forward
-8484/8485 and front with a TLS proxy (Caddy is the easiest:
-`caddy reverse-proxy --from your.domain --to localhost:8484`). The raw-TCP Lua
-port should stay LAN-only unless you trust the network; WSS is browser-only.
+With a domain (e.g. `mba.mouftools.com`), players anywhere get a trusted
+certificate and the LAN self-signed warning goes away entirely:
+
+1. **DNS** — in the domain dashboard (Vercel: your domain → DNS records), add
+   an **A record** for the (sub)domain pointing at your **public IP**
+   (whatismyip.com). Home IPs can change on router restarts — if yours does,
+   update the record (or ask us to add a small auto-update script).
+2. **Router** — forward **TCP 80 and 443** to this PC's LAN address.
+3. **Run** — with the game server already running:
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File scripts\start-public.ps1 -Domain mba.mouftools.com
+   ```
+   This installs Caddy (once), opens firewall ports, gets/renews Let's Encrypt
+   certificates automatically, and proxies HTTPS+WebSocket to the local
+   server. Players open `https://mba.mouftools.com` — LAN players can use the
+   same URL if the router supports NAT loopback (most do); otherwise they keep
+   using `https://<lan-ip>:8443`.
+
+No-domain alternative: [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/)
+(`cloudflared tunnel --url http://localhost:8484`) needs no DNS or port
+forwarding. The raw-TCP Lua port (8485) should stay LAN-only.
+
+### Why the extra HTTPS everywhere?
+
+Browsers only allow the threaded mGBA-WASM core (SharedArrayBuffer /
+cross-origin isolation) in a **secure context**: `https://` anywhere, or
+`http://localhost` on the host itself. Plain `http://<lan-ip>` can run demo
+mode but never the real emulator — that's what the server's self-signed
+:8443 listener (LAN) and this section (internet) are for.

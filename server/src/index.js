@@ -1,15 +1,20 @@
 // MultiBoyAdvance server entry point.
-//  - HTTP: serves web/ with cross-origin isolation (mgba-wasm is threaded)
-//  - WS  /ws: browser bridges
-//  - TCP :8485: desktop mGBA Lua bridges (newline-delimited JSON, same schema)
+//  - HTTP  :8484: serves web/ with cross-origin isolation (mgba-wasm is
+//                 threaded). Secure-context note: browsers only honor the
+//                 isolation over https or on localhost, so...
+//  - HTTPS :8443: same app with a self-signed cert — the URL LAN players use
+//  - WS   /ws on both: browser bridges
+//  - TCP   :8485: desktop mGBA Lua bridges (newline-delimited JSON, same schema)
 
 import http from 'node:http';
+import https from 'node:https';
 import net from 'node:net';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { config } from './config.js';
+import { ensureCert } from './tls.js';
 import { World } from './world/world.js';
 import { parseMessage } from './protocol.js';
 
@@ -29,9 +34,9 @@ const MIME = {
 export function createServers(cfg = config) {
   const world = new World(cfg);
 
-  // ---- HTTP static host ----
+  // ---- static host (shared by the HTTP and HTTPS servers) ----
   const webRoot = path.resolve(cfg.webRoot);
-  const httpServer = http.createServer((req, res) => {
+  const requestHandler = (req, res) => {
     const url = new URL(req.url, 'http://x');
     let rel = decodeURIComponent(url.pathname);
     if (rel === '/') rel = '/index.html';
@@ -54,7 +59,9 @@ export function createServers(cfg = config) {
       });
       res.end(data);
     });
-  });
+  };
+  const httpServer = http.createServer(requestHandler);
+  let httpsServer = null;
 
   // ---- shared per-connection glue ----
   function attach(send, closeTransport) {
@@ -83,8 +90,8 @@ export function createServers(cfg = config) {
     };
   }
 
-  // ---- WebSocket transport ----
-  const wss = new WebSocketServer({ server: httpServer, path: '/ws' });
+  // ---- WebSocket transport (attached to both HTTP and HTTPS) ----
+  const wss = new WebSocketServer({ noServer: true });
   wss.on('connection', (ws) => {
     const send = (obj) => {
       if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(obj));
@@ -94,6 +101,14 @@ export function createServers(cfg = config) {
     ws.on('close', () => conn.onClose());
     ws.on('error', () => {});
   });
+  const handleUpgrade = (req, socket, head) => {
+    if (new URL(req.url, 'http://x').pathname !== '/ws') {
+      socket.destroy();
+      return;
+    }
+    wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
+  };
+  httpServer.on('upgrade', handleUpgrade);
 
   // ---- raw TCP transport (JSON lines) ----
   const tcpServer = net.createServer((sock) => {
@@ -123,30 +138,50 @@ export function createServers(cfg = config) {
   const reaper = setInterval(() => world.reapStale(), 10_000);
   reaper.unref();
 
-  return {
+  const api = {
     world,
     httpServer,
     tcpServer,
-    listen() {
+    httpsServer: null,
+    async listen() {
       httpServer.listen(cfg.httpPort, cfg.host, () => {
-        console.log(`[mba] web+ws    on http://${cfg.host}:${cfg.httpPort}  (serving ${cfg.webRoot})`);
+        console.log(`[mba] http      on http://${cfg.host}:${cfg.httpPort}  (serving ${cfg.webRoot})`);
       });
       tcpServer.listen(cfg.tcpPort, cfg.host, () => {
         console.log(`[mba] tcp bridge on ${cfg.host}:${cfg.tcpPort}`);
       });
+      // HTTPS: LAN browsers only grant the cross-origin isolation the mGBA
+      // core needs in a secure context — https (any host) or plain http on
+      // localhost. Self-signed: players accept a one-time warning.
+      try {
+        const { key, cert } = await ensureCert(cfg.tlsDir);
+        httpsServer = https.createServer({ key, cert }, requestHandler);
+        httpsServer.on('upgrade', handleUpgrade);
+        api.httpsServer = httpsServer;
+        httpsServer.listen(cfg.httpsPort, cfg.host, () => {
+          console.log(`[mba] https     on https://${cfg.host}:${cfg.httpsPort}  <- LAN players use this one`);
+        });
+      } catch (err) {
+        console.warn(`[mba] https disabled (${err.message}); LAN ROM play will not work, localhost still will`);
+      }
     },
     close() {
       clearInterval(reaper);
       wss.close();
       httpServer.close();
+      httpsServer?.close();
       tcpServer.close();
       world.close();
     },
   };
+  return api;
 }
 
 // fileURLToPath, not URL.pathname: pathname yields "/C:/..." on Windows and
 // the comparison would never match, so `npm start` would silently exit.
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  createServers().listen();
+  createServers().listen().catch((err) => {
+    console.error('[mba] failed to start:', err);
+    process.exit(1);
+  });
 }

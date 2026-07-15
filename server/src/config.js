@@ -5,10 +5,12 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 
 export const config = {
   httpPort: Number(process.env.MBA_HTTP_PORT ?? 8484),
+  httpsPort: Number(process.env.MBA_HTTPS_PORT ?? 8443), // LAN play needs a secure context
   tcpPort: Number(process.env.MBA_TCP_PORT ?? 8485),
   host: process.env.MBA_HOST ?? '0.0.0.0',
   webRoot: process.env.MBA_WEB_ROOT ?? path.resolve(here, '../../web'),
   dataFile: process.env.MBA_DATA_FILE ?? path.resolve(here, '../data/world.json'),
+  tlsDir: process.env.MBA_TLS_DIR ?? path.resolve(here, '../data'),
   maxPlayers: 8,
   protocolVersion: 1,
   battleJoinWindowMs: Number(process.env.MBA_JOIN_WINDOW_MS ?? 10_000),

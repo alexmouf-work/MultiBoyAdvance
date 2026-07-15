@@ -18,7 +18,9 @@ if (-not (Test-Path 'node_modules')) {
 $ip = (Get-NetIPAddress -AddressFamily IPv4 |
     Where-Object { $_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.254.*' } |
     Select-Object -First 1).IPAddress
-Write-Host "[mba] players on your LAN can join at:  http://${ip}:8484" -ForegroundColor Green
-Write-Host '[mba] desktop mGBA bridges connect to port 8485'
+Write-Host "[mba] LAN players join at:   https://${ip}:8443   (accept the one-time certificate warning)" -ForegroundColor Green
+Write-Host "[mba] on this machine only:  http://localhost:8484"
+Write-Host '[mba] plain-http on the LAN IP works for DEMO MODE only - real-ROM play needs the https address'
+Write-Host '[mba] desktop mGBA bridges connect to TCP port 8485'
 
 npm start

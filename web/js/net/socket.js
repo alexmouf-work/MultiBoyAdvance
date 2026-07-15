@@ -10,7 +10,7 @@ export class Socket {
   #pingTimer = null;
   #closed = false;
 
-  constructor(url = `ws://${location.host}/ws`) {
+  constructor(url = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`) {
     this.#url = url;
   }
 

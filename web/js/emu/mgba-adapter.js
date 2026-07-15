@@ -9,7 +9,11 @@ export class MgbaAdapter {
 
   async init(canvas) {
     if (!crossOriginIsolated) {
-      throw new Error('page is not cross-origin isolated; the mGBA core cannot start');
+      throw new Error(
+        'this page is not a secure context, so the threaded mGBA core cannot start. ' +
+        'Open the client via the https:// address (port 8443; accept the one-time ' +
+        'certificate warning) — or via http://localhost:8484 on the host machine itself.',
+      );
     }
     const { default: mGBA } = await import('/vendor/mgba.js');
     this.#module = await mGBA({ canvas });

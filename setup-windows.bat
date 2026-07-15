@@ -4,7 +4,7 @@ title MultiBoyAdvance setup
 cd /d "%~dp0"
 
 echo ============================================================
-echo  MultiBoyAdvance - one-shot Windows setup  (script v6)
+echo  MultiBoyAdvance - one-shot Windows setup  (script v7)
 echo  Steps: admin check / self-update / Node.js / dependencies /
 echo         tests / ROM build (optional, WSL2) / firewall / launch
 echo ============================================================
@@ -171,8 +171,9 @@ echo [4/6] ROM built: rom\build\mba.gba. OK.
 
 :firewall
 :: ---------- [5/6] firewall ----------
-echo [5/6] Allowing ports 8484 (web/ws) and 8485 (desktop mGBA bridge)...
-powershell -NoProfile -Command "if (-not (Get-NetFirewallRule -DisplayName 'MultiBoyAdvance' -ErrorAction SilentlyContinue)) { New-NetFirewallRule -DisplayName 'MultiBoyAdvance' -Direction Inbound -Protocol TCP -LocalPort 8484,8485 -Action Allow | Out-Null; Write-Host '      Rule created.' } else { Write-Host '      Rule already exists.' }"
+echo [5/6] Allowing ports 8484 (http), 8443 (https - LAN play), 8485 (mGBA bridge)...
+powershell -NoProfile -Command "if (-not (Get-NetFirewallRule -DisplayName 'MultiBoyAdvance' -ErrorAction SilentlyContinue)) { New-NetFirewallRule -DisplayName 'MultiBoyAdvance' -Direction Inbound -Protocol TCP -LocalPort 8484,8485 -Action Allow | Out-Null; Write-Host '      Rule created (8484,8485).' } else { Write-Host '      Rule exists (8484,8485).' }"
+powershell -NoProfile -Command "if (-not (Get-NetFirewallRule -DisplayName 'MultiBoyAdvance HTTPS' -ErrorAction SilentlyContinue)) { New-NetFirewallRule -DisplayName 'MultiBoyAdvance HTTPS' -Direction Inbound -Protocol TCP -LocalPort 8443 -Action Allow | Out-Null; Write-Host '      Rule created (8443).' } else { Write-Host '      Rule exists (8443).' }"
 
 :: ---------- [6/6] launch ----------
 echo [6/6] Starting the server (Ctrl+C to stop; run scripts\start-server.ps1 next time)...
