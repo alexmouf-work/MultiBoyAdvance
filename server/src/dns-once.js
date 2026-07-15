@@ -10,5 +10,8 @@ if (!cfg) {
   console.error('not configured: create server/data/dns.json with {"token": "...", "domain": "mouftools.com", "name": "mba"}');
   process.exit(1);
 }
-const { ip, action } = await updateDnsOnce(cfg);
+const { ip, action, teamId } = await updateDnsOnce(cfg);
 console.log(`${cfg.name}.${cfg.domain} -> ${ip} (${action})`);
+if (teamId && !cfg.teamId) {
+  console.log(`hint: domain found in team scope ${teamId} — add "teamId": "${teamId}" to dns.json to skip auto-discovery`);
+}
