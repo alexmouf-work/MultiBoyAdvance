@@ -32,7 +32,7 @@
         http://localhost:8484 on the host machine.
       </p>
       <div class="alt">
-        <button id="btn-demo" class="ghost">Demo mode (no ROM)</button>
+        <button id="btn-demo" class="ghost" hidden>Demo (dev)</button>
         <details>
           <summary>Advanced</summary>
           <label class="file-btn">Load a ROM file
@@ -45,6 +45,7 @@
 
   <!-- ============ game screen ============ -->
   <section id="stage" hidden>
+    <div id="main">
     <h1 id="title">MultiBoyAdvance</h1>
 
     <div id="gamewrap">
@@ -91,17 +92,18 @@
     </div>
 
     <div id="offers"></div>
+    </div><!-- /#main -->
 
-    <div id="panels">
+    <aside id="sidebar">
       <div class="panel">
-        <h3>Players</h3>
+        <h3>Online</h3>
         <ul id="players"></ul>
       </div>
       <div class="panel">
         <h3>Events</h3>
         <ul id="log"></ul>
       </div>
-    </div>
+    </aside>
   </section>
 
   <script type="module" src="/js/main.js"></script>

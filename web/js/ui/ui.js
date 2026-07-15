@@ -2,15 +2,33 @@
 // Deliberately framework-free; elements carry stable ids/data attributes so
 // the e2e suite can assert on them.
 
+const PLAYER_COLORS = ['#e5484d', '#3e63dd', '#30a46c', '#f5a623', '#8e4ec6', '#00b3c2', '#d6409f', '#846358'];
+
+function formatDuration(ms) {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ${String(s % 60).padStart(2, '0')}s`;
+  return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m`;
+}
+
 export class UI {
   constructor(socket, bridge, adapter) {
     this.socket = socket;
     this.bridge = bridge;
     this.adapter = adapter;
     this.slot = null;
-    this.players = new Map(); // slot -> name
+    this.players = new Map(); // slot -> {name, joinedAt (local clock)}
     this.$ = (sel) => document.querySelector(sel);
     this.#wire();
+    setInterval(() => this.#tickDurations(), 1000);
+  }
+
+  #tickDurations() {
+    for (const li of this.$('#players')?.querySelectorAll('li') ?? []) {
+      const p = this.players.get(Number(li.dataset.slot));
+      if (p) li.querySelector('.dur').textContent = `online ${formatDuration(Date.now() - p.joinedAt)}`;
+    }
   }
 
   log(kind, text) {
@@ -30,13 +48,24 @@ export class UI {
   #renderPlayers() {
     const ul = this.$('#players');
     ul.innerHTML = '';
-    for (const [slot, name] of [...this.players.entries()].sort((a, b) => a[0] - b[0])) {
+    for (const [slot, p] of [...this.players.entries()].sort((a, b) => a[0] - b[0])) {
       const li = document.createElement('li');
       li.dataset.slot = slot;
-      const label = document.createElement('span');
-      label.textContent = `P${slot + 1} ${name}${slot === this.slot ? ' (you)' : ''}`;
-      li.append(label);
+
+      const dot = document.createElement('span');
+      dot.className = 'dot';
+      dot.style.background = PLAYER_COLORS[slot % PLAYER_COLORS.length];
+      const name = document.createElement('span');
+      name.className = 'pname';
+      name.textContent = `${p.name}${slot === this.slot ? ' (you)' : ''}`;
+      const dur = document.createElement('span');
+      dur.className = 'dur';
+      dur.textContent = `online ${formatDuration(Date.now() - p.joinedAt)}`;
+      li.append(dot, name, dur);
+
       if (slot !== this.slot) {
+        const actions = document.createElement('span');
+        actions.className = 'actions';
         const tp = document.createElement('button');
         tp.textContent = 'teleport';
         tp.dataset.action = 'tp';
@@ -45,7 +74,8 @@ export class UI {
         pvp.textContent = 'battle';
         pvp.dataset.action = 'pvp';
         pvp.onclick = () => this.socket.send({ t: 'pvp', to: slot });
-        li.append(tp, pvp);
+        actions.append(tp, pvp);
+        li.append(actions);
       }
       ul.append(li);
     }
@@ -58,8 +88,15 @@ export class UI {
     s.on('welcome', (m) => {
       this.slot = m.slot;
       this.players.clear();
-      this.players.set(m.slot, this.$('#name').value || `Player${m.slot + 1}`);
-      for (const p of m.players) this.players.set(p.slot, p.name);
+      this.players.set(m.slot, {
+        name: this.$('#name').value || `Player${m.slot + 1}`,
+        joinedAt: Date.now(),
+      });
+      // onlineMs from the server -> local join instant, so durations tick on
+      // the local clock with no cross-machine skew.
+      for (const p of m.players) {
+        this.players.set(p.slot, { name: p.name, joinedAt: Date.now() - (p.onlineMs ?? 0) });
+      }
       this.#renderPlayers();
       this.log('welcome', `joined as P${m.slot + 1} · ${m.flags.length} world flags known`);
       if (m.speed > 1) this.#applySpeed(m.speed);
@@ -70,9 +107,9 @@ export class UI {
     });
     s.on('join', (m) => {
       if (m.sid) return; // battle-join notices handled in log only
-      this.players.set(m.slot, m.name);
+      this.players.set(m.slot, { name: m.name, joinedAt: Date.now() });
       this.#renderPlayers();
-      this.log('join', `P${m.slot + 1} ${m.name} joined`);
+      this.log('join', `${m.name} joined`);
     });
     s.on('leave', (m) => {
       this.players.delete(m.slot);

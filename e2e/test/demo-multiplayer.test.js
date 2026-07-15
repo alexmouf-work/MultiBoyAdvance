@@ -45,7 +45,7 @@ after(async () => {
 
 async function joinAsDemo(name) {
   const page = await browser.newPage();
-  await page.goto(baseUrl);
+  await page.goto(`${baseUrl}/?demo=1`); // demo is a dev-only harness now
   await page.fill('#name', name);
   await page.click('#btn-demo');
   await page.waitForSelector('#chip-server.ok', { timeout: 5000 });

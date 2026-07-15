@@ -161,7 +161,7 @@ Every message has `t` (type). Server assigns each connection an integer `slot`
 
 | `t` | Fields | Meaning |
 |---|---|---|
-| `welcome` | `id`, `slot`, `players` [{slot,name}], `flags` [int], `vars` [[id,v]], `speed` int | join accepted; replay world state |
+| `welcome` | `id`, `slot`, `players` [{slot,name,onlineMs}], `flags` [int], `vars` [[id,v]], `speed` int | join accepted; replay world state (`onlineMs` = how long each player has been connected) |
 | `join` / `leave` | `slot`, `name?` | roster changes |
 | `ghost` | `slot,g,n,x,y,f,s` | another player's presence (only sent to players on the same map; a synthetic `s:255` despawns) |
 | `flag` / `var` | `id`, `v?` | authoritative world-state update |

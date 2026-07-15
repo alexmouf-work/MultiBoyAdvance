@@ -35,7 +35,9 @@ test('welcome carries roster and world state; join/leave broadcast', () => {
 
   const b = join(world, 'Sam');
   assert.equal(msgs(b.inbox, 'welcome')[0].slot, 1);
-  assert.deepEqual(msgs(b.inbox, 'welcome')[0].players, [{ slot: 0, name: 'Alex' }]);
+  const roster = msgs(b.inbox, 'welcome')[0].players;
+  assert.deepEqual(roster.map((p) => ({ slot: p.slot, name: p.name })), [{ slot: 0, name: 'Alex' }]);
+  assert.ok(roster[0].onlineMs >= 0, 'welcome carries online duration');
   assert.equal(msgs(a.inbox, 'join')[0].name, 'Sam');
 
   world.removeClient(b.client);

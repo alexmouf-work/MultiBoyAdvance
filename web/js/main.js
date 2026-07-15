@@ -23,6 +23,10 @@ async function initJoinScreen() {
   const secure = crossOriginIsolated;
   if (!secure) $('#ctx-warning').hidden = false;
 
+  // Demo mode is a development harness, not a product feature: reachable only
+  // via ?demo=1 (the e2e suite uses it), invisible to players.
+  if (new URLSearchParams(location.search).has('demo')) $('#btn-demo').hidden = false;
+
   if (await serverHasRom()) {
     if (secure) {
       $('#btn-join').disabled = false;
@@ -31,8 +35,7 @@ async function initJoinScreen() {
       $('#rom-status').textContent = 'Game build found, but this address cannot run it (see below).';
     }
   } else {
-    $('#rom-status').textContent =
-      'No game build on the server yet (host: run the ROM build). Demo mode still works.';
+    $('#rom-status').textContent = 'No game build on the server yet (host: run the ROM build).';
   }
 }
 

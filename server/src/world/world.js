@@ -20,6 +20,7 @@ class Client {
     this.pos = { x: 0, y: 0, f: 0, s: 0 };
     this.party = []; // latest party summary [{sp,lv,hp}]
     this.fullMons = []; // latest full wire mons [{lv, b:[32 ints]}]
+    this.joinedAt = Date.now();
     this.lastSeen = Date.now();
   }
 }
@@ -75,7 +76,7 @@ export class World {
       slot,
       players: [...this.clients.values()]
         .filter((c) => c !== client)
-        .map((c) => ({ slot: c.slot, name: c.name })),
+        .map((c) => ({ slot: c.slot, name: c.name, onlineMs: Date.now() - c.joinedAt })),
       flags: [...this.state.flags],
       vars: [...this.state.vars.entries()],
       speed: this.speed,
