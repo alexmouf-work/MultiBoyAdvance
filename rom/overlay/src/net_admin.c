@@ -155,15 +155,28 @@ static bool8 AdminApply(const u8 *p, u8 len)
     return TRUE;
 }
 
+// Resync must survive the new-game report burst (the out-ring WILL be full
+// on that frame — 159 map flags get reported); retry until the write lands.
+static bool8 sResyncPending;
+
 // Called once per frame from NetTick.
 void NetAdminTick(void)
 {
+    if (sResyncPending)
+    {
+        static const u8 sResync[2] = { NET_REQ_RESYNC, 0 };
+
+        if (NetOutWrite(NET_MSG_REQUEST, sResync, sizeof(sResync)))
+            sResyncPending = FALSE;
+    }
+
     while (sQueueCount)
     {
         if (gMain.callback2 != CB2_Overworld)
             return; // not safe yet (title, intro, battle, menus)
         if (!AdminApply(sQueue[sQueueHead], sQueueSize[sQueueHead]))
             return; // front command wants a quieter frame; keep order
+        NetLogNum("admin applied sub", sQueue[sQueueHead][0]);
         sQueueHead = (sQueueHead + 1) % ADMIN_QUEUE_LEN;
         sQueueCount--;
     }
@@ -182,8 +195,8 @@ void NetQuickStart(void)
     static const u8 sDefaultName[PLAYER_NAME_LENGTH + 1] = {
         CHAR_P, CHAR_L, CHAR_A, CHAR_Y, CHAR_E, CHAR_R, EOS, EOS,
     };
-    static const u8 sResync[2] = { NET_REQ_RESYNC, 0 };
 
+    NetLog("quickstart: new game init");
     memcpy(gSaveBlock2Ptr->playerName, sDefaultName, sizeof(sDefaultName));
     gSaveBlock2Ptr->playerGender = 0;
 
@@ -210,6 +223,7 @@ void NetQuickStart(void)
     SetLastHealLocationWarp(HEAL_LOCATION_OLDALE_TOWN);
 
     // NewGameInitData wiped the world state the welcome replay applied at the
-    // title screen; ask the server to send it (and our name) again.
-    NetOutWrite(NET_MSG_REQUEST, sResync, sizeof(sResync));
+    // title screen; ask the server to send it (and our name) again. Deferred
+    // to NetAdminTick — the ring is guaranteed full on this exact frame.
+    sResyncPending = TRUE;
 }

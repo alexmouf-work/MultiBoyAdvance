@@ -130,6 +130,18 @@ export class World {
     }
   }
 
+  /** Remove a trainer from the registry (offline only). Used by /delete. */
+  deleteUser(name) {
+    const key = String(name).toLowerCase();
+    for (const c of this.clients.values()) {
+      if (c.name.toLowerCase() === key) return { ok: false, msg: `${c.name} is online — they must leave first` };
+    }
+    const u = this.state.deleteUser(key);
+    if (!u) return { ok: false, msg: `no trainer named "${name}" — /players` };
+    this._broadcast({ t: 'users', users: this.usersSnapshot() });
+    return { ok: true, msg: `deleted trainer ${u.name}` };
+  }
+
   /** Every trainer ever seen, with online status and last/current location. */
   usersSnapshot() {
     const online = new Map();

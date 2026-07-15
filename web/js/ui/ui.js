@@ -35,8 +35,33 @@ export class UI {
     this.#wireStarter();
     this.#wireProximity();
     this.bridge.onParty = (mons) => this.#onOwnParty(mons);
+    this.bridge.onLog = (text) => this.#debugLog(text);
     setInterval(() => this.#tickDurations(), 1000);
     setInterval(() => this.#tickProximity(), 500);
+    setInterval(() => this.#tickDebug(), 500);
+  }
+
+  // ---- debug panel: the game's live heartbeat + its log feed ----
+
+  #debugLog(text) {
+    const out = this.$('#debug-log');
+    if (!out) return;
+    const li = document.createElement('li');
+    li.textContent = text;
+    if (/STALLED/.test(text)) li.dataset.warn = '1';
+    out.prepend(li);
+    while (out.children.length > 80) out.lastChild.remove();
+  }
+
+  #tickDebug() {
+    const el = this.$('#debug-stat');
+    if (!el) return;
+    const states = ['boot', 'overworld', 'battle', 'menu', 'other'];
+    const lf = this.bridge.lastFrame;
+    el.textContent = lf
+      ? `frame ${lf.fc} · ${states[lf.gs] ?? `state ${lf.gs}`} · mailbox: ${this.bridge.status}`
+      : `mailbox: ${this.bridge.status}`;
+    el.classList.toggle('warn', this.bridge.status === 'stalled');
   }
 
   #tickDurations() {

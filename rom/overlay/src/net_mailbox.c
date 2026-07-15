@@ -15,6 +15,7 @@ void NetApplyIncoming(void);
 void NetWarpTick(void);
 void NetBattleTick(void);
 void NetAdminTick(void);
+void NetFlagsTick(void);
 
 static void NetInit(void)
 {
@@ -92,6 +93,46 @@ bool8 NetIsOnline(void)
     return sInitialized && gNetMailbox.hostAttached != 0;
 }
 
+// ---- debug feed -------------------------------------------------------------
+// Short ASCII lines for the bridge's debug panel. Dropped silently when the
+// ring is full — logging must never disturb the game.
+
+#define NET_LOG_MAX 48
+
+void NetLog(const char *msg)
+{
+    u8 p[NET_LOG_MAX];
+    u32 n = 0;
+
+    if (!sInitialized)
+        return;
+    while (msg[n] != '\0' && n < NET_LOG_MAX)
+    {
+        p[n] = (u8)msg[n];
+        n++;
+    }
+    NetOutWrite(NET_MSG_LOG, p, n);
+}
+
+void NetLogNum(const char *tag, u32 value)
+{
+    u8 p[NET_LOG_MAX];
+    u32 n = 0;
+    s32 shift;
+
+    if (!sInitialized)
+        return;
+    while (tag[n] != '\0' && n < NET_LOG_MAX - 10)
+    {
+        p[n] = (u8)tag[n];
+        n++;
+    }
+    p[n++] = '=';
+    for (shift = 28; shift >= 0; shift -= 4)
+        p[n++] = "0123456789ABCDEF"[(value >> shift) & 0xF];
+    NetOutWrite(NET_MSG_LOG, p, n);
+}
+
 void NetTick(void)
 {
     if (!sInitialized)
@@ -103,9 +144,11 @@ void NetTick(void)
     NetApplyIncoming();
 
     // Producers: presence, party change detection, pending warp application,
-    // queued admin commands (applied only on safe overworld frames).
+    // queued admin commands (applied only on safe overworld frames), and the
+    // dirty flag/var report drain (survives ring-full bursts).
     NetOverworldTick();
     NetBattleTick();
     NetWarpTick();
     NetAdminTick();
+    NetFlagsTick();
 }

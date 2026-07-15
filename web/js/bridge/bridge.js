@@ -18,7 +18,11 @@ export class Bridge {
   #status = 'searching';
   onStatus = () => {};
   onParty = () => {}; // (mons summary) — UI starter picker keys off this
+  onLog = () => {}; // (text) — game debug feed + bridge diagnostics
   myPos = null; // our own last reported {g,n,x,y,f,s} (ghost proximity UI)
+  lastFrame = null; // {fc, gs} — live heartbeat for the debug panel
+  #stallFrames = 0;
+  #stalled = false;
 
   constructor(adapter, socket) {
     this.#adapter = adapter;
@@ -54,6 +58,26 @@ export class Bridge {
       this.#setStatus('attached');
     }
     this.#box.attach(mem, this.#box.base); // heap may have been replaced
+
+    // Heartbeat + freeze detector: the emulator emits video frames even when
+    // the ARM main loop is stuck inside one, so a frameCounter that stops
+    // moving for ~2s means the GAME is hard-hung — surface it loudly.
+    const fc = this.#box.frameCounter;
+    if (this.lastFrame && fc === this.lastFrame.fc) {
+      if (++this.#stallFrames === 120 && !this.#stalled) {
+        this.#stalled = true;
+        this.onLog(`GAME STALLED — frame counter stuck at ${fc}, gameState ${this.#box.gameState}`);
+        this.#setStatus('stalled');
+      }
+    } else {
+      if (this.#stalled) {
+        this.#stalled = false;
+        this.onLog('game resumed');
+        this.#setStatus('game-ready');
+      }
+      this.#stallFrames = 0;
+    }
+    this.lastFrame = { fc, gs: this.#box.gameState };
 
     for (const rec of this.#box.readOut()) this.#gameToWire(rec);
     this.#flushPendingPos();
@@ -94,6 +118,9 @@ export class Bridge {
     switch (type) {
       case T.HELLO:
         this.#setStatus('game-ready');
+        break;
+      case T.LOG:
+        this.onLog(String.fromCharCode(...payload));
         break;
       case T.PRESENCE: {
         const p = dec.presence(payload);

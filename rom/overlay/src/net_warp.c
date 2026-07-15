@@ -43,6 +43,7 @@ void NetWarpTick(void)
         return;
 
     sWarp.pending = FALSE;
+    NetLogNum("warp to map", ((u32)sWarp.mapGroup << 8) | sWarp.mapNum);
     NetGhostsHideAll(); // our sprites must not outlive the map they're on
     StopPlayerAvatar();
     SetWarpDestination(sWarp.mapGroup, sWarp.mapNum, WARP_ID_NONE, sWarp.x, sWarp.y);

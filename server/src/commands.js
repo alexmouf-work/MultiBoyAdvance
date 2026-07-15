@@ -12,6 +12,7 @@ const HELP = [
   '/resettrainer <player> <trainerId> — un-defeat an NPC trainer (rewards keep)',
   '/tp <player> — request to teleport to them (they accept)',
   '/warp <group> <map> <x> <y> — warp yourself to map coordinates',
+  '/delete <name> — remove an offline trainer from the registry',
 ].join('\n');
 
 function findTarget(world, me, word) {
@@ -104,6 +105,8 @@ export function runCommand(world, me, line) {
       const trainer = int(a[1], 0, 0x35f);
       if (!target || trainer === null) return { ok: false, msg: 'usage: /resettrainer <player> <trainerId>' };
       send(target, { sub: 'reset_trainer', trainer });
+      // Forget the world copy too, or the next welcome/resync re-defeats it.
+      world.state.clearFlag(0x500 + trainer); // TRAINER_FLAGS_START
       return { ok: true, msg: `trainer ${trainer} reset for ${target.name}` };
     }
 
@@ -122,6 +125,12 @@ export function runCommand(world, me, line) {
       if (g === null || n === null || x === null || y === null) return { ok: false, msg: 'usage: /warp <group> <map> <x> <y>' };
       me.send({ t: 'warp', g, n, x, y });
       return { ok: true, msg: `warping you to map ${g}.${n} (${x},${y})` };
+    }
+
+    case '/delete': {
+      const name = a.join(' ');
+      if (!name) return { ok: false, msg: 'usage: /delete <name>' };
+      return world.deleteUser(name);
     }
 
     default:

@@ -75,12 +75,28 @@ export class WorldState {
     this._scheduleSave();
   }
 
+  /** Remove a trainer from the registry. @returns the record, or null. */
+  deleteUser(name) {
+    const key = String(name).toLowerCase();
+    const u = this.users.get(key) ?? null;
+    if (u) {
+      this.users.delete(key);
+      this._scheduleSave();
+    }
+    return u;
+  }
+
   /** @returns {boolean} true if this is new information worth broadcasting */
   setFlag(id) {
     if (this.flags.has(id)) return false;
     this.flags.add(id);
     this._scheduleSave();
     return true;
+  }
+
+  /** Forget a world flag (e.g. /resettrainer), so replays don't resurrect it. */
+  clearFlag(id) {
+    if (this.flags.delete(id)) this._scheduleSave();
   }
 
   /** @returns {boolean} true if the value changed */

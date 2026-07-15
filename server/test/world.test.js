@@ -242,6 +242,28 @@ test('trade.give moves items between bags; starter kit guards double-grants', ()
   world.close();
 });
 
+test('/delete removes offline trainers only', () => {
+  const world = new World(makeCfg());
+  const a = join(world, 'Keeper');
+  const b = join(world, 'Goner');
+  world.removeClient(b.client);
+  assert.equal(world.usersSnapshot().length, 2);
+
+  // online targets are refused
+  world.handle(a.client, { t: 'cmd', line: '/delete keeper' });
+  assert.match(msgs(a.inbox, 'cmd.result').at(-1).msg, /online/);
+
+  // offline trainer: deleted, registry broadcast updates
+  world.handle(a.client, { t: 'cmd', line: '/delete goner' });
+  assert.equal(msgs(a.inbox, 'cmd.result').at(-1).ok, true);
+  assert.equal(world.usersSnapshot().length, 1);
+  assert.equal(msgs(a.inbox, 'users').at(-1).users.some((u) => u.name === 'Goner'), false);
+
+  world.handle(a.client, { t: 'cmd', line: '/delete goner' }); // already gone
+  assert.equal(msgs(a.inbox, 'cmd.result').at(-1).ok, false);
+  world.close();
+});
+
 test('resync replays world state and the registered name', () => {
   const world = new World(makeCfg());
   world.state.setFlag(0x321);

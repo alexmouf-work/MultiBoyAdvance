@@ -25,6 +25,7 @@ enum {
     NET_MSG_VAR_SET = 0x03,       // varId u16, value u16
     NET_MSG_PARTY_SUMMARY = 0x05, // count u8, {species u16, level u8, hpPct u8} * count
     NET_MSG_REQUEST = 0x06,       // sub u8 (1=tp 2=pvp 3=pvp-accept 4=resync), arg u8
+    NET_MSG_LOG = 0x0F,           // ASCII debug text — bridges surface it locally (not sent to the server)
     NET_MSG_PARTY_FULL = 0x07,    // count u8, NET_MON_WIRE_SIZE bytes * count
     NET_MSG_BATTLE_EVENT = 0x10,  // sub u8: 1=encounter{kind u8,opp u16} 2=input 3=outcome{result u8}
     NET_MSG_HELLO = 0x7F,         // version u8

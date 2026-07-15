@@ -53,4 +53,9 @@ extern struct NetGhost gNetGhosts[NET_MAX_PLAYERS];
 // True while a host bridge is attached (drives online UI affordances).
 bool8 NetIsOnline(void);
 
+// Debug feed (NET_MSG_LOG): short ASCII lines surfaced in the bridge's debug
+// panel — the in-game "traceback". Cheap enough to leave in release builds.
+void NetLog(const char *msg);
+void NetLogNum(const char *tag, u32 value); // emits "tag=HEX"
+
 #endif // GUARD_NET_NET_H

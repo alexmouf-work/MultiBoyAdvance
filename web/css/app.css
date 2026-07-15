@@ -389,6 +389,26 @@ button.ghost { background: transparent; }
   font: 13px ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
+/* debug panel: live game heartbeat + the ROM's log feed */
+#debug-stat {
+  font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--ok);
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 6px;
+}
+#debug-stat.warn { color: var(--warn); font-weight: 700; }
+#debug-log {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 160px;
+  overflow: auto;
+  font: 11px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+#debug-log li { padding: 2px 0; border-bottom: 1px solid var(--line); color: var(--dim); }
+#debug-log li[data-warn] { color: var(--warn); font-weight: 700; }
+
 /* ============ touch controls ============ */
 /* --ps scales every pad dimension (the "Size" slider writes it). */
 #touch {

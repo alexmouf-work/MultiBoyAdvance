@@ -88,6 +88,7 @@ record self-delimiting). Types `0x01–0x7F` flow game→host, `0x80–0xFF` hos
 | 0x05 | `PARTY_SUMMARY` | count u8, then per mon: species u16, level u8, hpPct u8 — sent on party change; drives roster UI |
 | 0x07 | `PARTY_FULL` | count u8, then count × 32-byte wire mons (§1.5) — sent on party change; the server merges these for co-op battles |
 | 0x06 | `REQUEST` | sub u8, arg u8: sub 1=teleport-to-slot(arg), 2=pvp-challenge(arg), 3=pvp-accept(arg), 4=resync (arg unused; a fresh save asks the server to replay world flags/vars + identity) |
+| 0x0F | `LOG` | raw ASCII text (≤48 bytes) — the game's debug feed (`NetLog`/`NetLogNum`). Bridges surface it locally (web Debug panel / mGBA console); it is NOT forwarded to the server |
 | 0x10 | `BATTLE_EVENT` | sub u8, then: sub 1=ENCOUNTER_OPEN {kind u8, opponent u16}; sub 2=TURN_INPUT {turn u8, action u8, moveSlot u8, target u8, extra u16}; sub 3=OUTCOME {result u8: 1=win 2=loss 3=flee} |
 | 0x7F | `HELLO` | version u8 — game finished booting netcode |
 
