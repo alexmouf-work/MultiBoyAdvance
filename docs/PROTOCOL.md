@@ -181,8 +181,9 @@ Every message has `t` (type). Server assigns each connection an integer `slot`
 
 | `t` | Fields | Meaning |
 |---|---|---|
-| `welcome` | `id`, `slot`, `players` [{slot,name,onlineMs}], `flags` [int], `vars` [[id,v]], `speed` int | join accepted; replay world state (`onlineMs` = how long each player has been connected) |
+| `welcome` | `id`, `slot`, `players` [{slot,name,onlineMs}], `users` (see `users`), `flags` [int], `vars` [[id,v]], `speed` int | join accepted; replay world state (`onlineMs` = how long each player has been connected) |
 | `join` / `leave` | `slot`, `name?` | roster changes |
+| `users` | `users` [{`name`, `online` bool, `slot?`, `g?,n?,x?,y?`, `lastSeenAt?` ms-epoch}] | the trainer registry: every player ever seen, with current (online) or last (offline) location; broadcast on join/leave |
 | `ghost` | `slot,g,n,x,y,f,s` | another player's presence (only sent to players on the same map; a synthetic `s:255` despawns) |
 | `flag` / `var` | `id`, `v?` | authoritative world-state update |
 | `battle.offer` | `sid`, `from` slot, `kind`, `opp`, `ttl` ms | someone opened a battle you may join |
@@ -226,6 +227,13 @@ Every message has `t` (type). Server assigns each connection an integer `slot`
 (`rom/build/mba.gba`), served `no-store` so a rebuild is picked up on the next
 join. 404 when the host hasn't built one. The build never enters the git repo;
 it exists only on the host's server.
+
+`GET /api/users` — `{users: [...]}` in the same shape as the `users` wire
+message. The join screen uses it (before any WebSocket exists) to list
+returning trainers, their online status, and where they were last seen; one
+click joins as that trainer. Trainer records persist in the server's world
+state file (`server/data/`), keyed case-insensitively by name — friends-trust
+model, no passwords.
 
 ### 2.5 Timing
 

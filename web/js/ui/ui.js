@@ -2,6 +2,8 @@
 // Deliberately framework-free; elements carry stable ids/data attributes so
 // the e2e suite can assert on them.
 
+import { mapName } from '../data/map-names.js';
+
 const PLAYER_COLORS = ['#e5484d', '#3e63dd', '#30a46c', '#f5a623', '#8e4ec6', '#00b3c2', '#d6409f', '#846358'];
 
 function formatDuration(ms) {
@@ -12,6 +14,12 @@ function formatDuration(ms) {
   return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, '0')}m`;
 }
 
+function offlineLine(u) {
+  const where = mapName(u.g, u.n);
+  const ago = u.lastSeenAt ? `seen ${formatDuration(Date.now() - u.lastSeenAt)} ago` : '';
+  return [where, ago].filter(Boolean).join(' · ') || 'offline';
+}
+
 export class UI {
   constructor(socket, bridge, adapter) {
     this.socket = socket;
@@ -19,6 +27,7 @@ export class UI {
     this.adapter = adapter;
     this.slot = null;
     this.players = new Map(); // slot -> {name, joinedAt (local clock)}
+    this.directory = []; // every trainer the server knows (incl. offline)
     this.ghosts = new Map(); // slot -> last ghost pos (proximity checks)
     this.$ = (sel) => document.querySelector(sel);
     this.#wire();
@@ -32,6 +41,7 @@ export class UI {
 
   #tickDurations() {
     for (const li of this.$('#players')?.querySelectorAll('li') ?? []) {
+      if (li.classList.contains('offline')) continue; // "seen … ago" refreshes on re-render
       const p = this.players.get(Number(li.dataset.slot));
       if (p) li.querySelector('.dur').textContent = `online ${formatDuration(Date.now() - p.joinedAt)}`;
     }
@@ -87,6 +97,24 @@ export class UI {
       }
       ul.append(li);
     }
+
+    // Offline trainers, dimmed, with where they logged out (server registry).
+    const onlineNames = new Set([...this.players.values()].map((p) => p.name.toLowerCase()));
+    for (const u of this.directory) {
+      if (u.online || onlineNames.has(u.name.toLowerCase())) continue;
+      const li = document.createElement('li');
+      li.className = 'offline';
+      const dot = document.createElement('span');
+      dot.className = 'dot off';
+      const name = document.createElement('span');
+      name.className = 'pname';
+      name.textContent = u.name;
+      const dur = document.createElement('span');
+      dur.className = 'dur';
+      dur.textContent = offlineLine(u);
+      li.append(dot, name, dur);
+      ul.append(li);
+    }
   }
 
   #wire() {
@@ -105,9 +133,14 @@ export class UI {
       for (const p of m.players) {
         this.players.set(p.slot, { name: p.name, joinedAt: Date.now() - (p.onlineMs ?? 0) });
       }
+      this.directory = m.users ?? [];
       this.#renderPlayers();
       this.log('welcome', `joined as P${m.slot + 1} · ${m.flags.length} world flags known`);
       if (m.speed > 1) this.#applySpeed(m.speed);
+    });
+    s.on('users', (m) => {
+      this.directory = m.users ?? [];
+      this.#renderPlayers();
     });
     s.on('speed', (m) => {
       this.#applySpeed(m.x);

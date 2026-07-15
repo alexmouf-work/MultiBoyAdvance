@@ -250,6 +250,33 @@ test('shared speed: clamped, broadcast to everyone, replayed in welcome', () => 
   world.close();
 });
 
+test('trainer registry: welcome + broadcasts carry online status and locations', () => {
+  const world = new World(makeCfg());
+  const a = join(world, 'Alex');
+  world.handle(a.client, { t: 'pos', g: 0, n: 16, x: 8, y: 4, f: 0, s: 0 });
+
+  const b = join(world, 'Sam');
+  const users = msgs(b.inbox, 'welcome')[0].users;
+  const alex = users.find((u) => u.name === 'Alex');
+  assert.equal(alex.online, true);
+  assert.equal(alex.slot, 0);
+  assert.deepEqual([alex.g, alex.n, alex.x, alex.y], [0, 16, 8, 4]);
+  assert.ok(msgs(a.inbox, 'users').length >= 1, "Sam's arrival updates Alex's registry view");
+
+  // logging out keeps the record, flips it offline at the same spot
+  world.removeClient(a.client);
+  const after = msgs(b.inbox, 'users').at(-1).users;
+  const gone = after.find((u) => u.name === 'Alex');
+  assert.equal(gone.online, false);
+  assert.deepEqual([gone.g, gone.n, gone.x, gone.y], [0, 16, 8, 4]);
+  assert.ok(gone.lastSeenAt <= Date.now());
+
+  // rejoining under different casing reuses the record, not a new one
+  join(world, 'alex');
+  assert.equal(world.usersSnapshot().length, 2);
+  world.close();
+});
+
 test('world full rejects a 9th player', () => {
   const world = new World(makeCfg());
   for (let i = 0; i < 8; i++) join(world, `P${i}`);

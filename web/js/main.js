@@ -4,9 +4,11 @@ import { Bridge } from './bridge/bridge.js';
 import { UI } from './ui/ui.js';
 import { assertAdapter } from './emu/adapter.js';
 import { DemoAdapter } from './emu/demo-adapter.js';
+import { mapName } from './data/map-names.js';
 
 const $ = (sel) => document.querySelector(sel);
 const ROM_URL = '/rom/mba.gba';
+let joinReady = false; // ROM present + secure context
 
 // ---- join screen state -------------------------------------------------------
 
@@ -29,6 +31,7 @@ async function initJoinScreen() {
 
   if (await serverHasRom()) {
     if (secure) {
+      joinReady = true;
       $('#btn-join').disabled = false;
       $('#rom-status').textContent = 'Game build ready — served fresh from the host.';
     } else {
@@ -36,6 +39,62 @@ async function initJoinScreen() {
     }
   } else {
     $('#rom-status').textContent = 'No game build on the server yet (host: run the ROM build).';
+  }
+
+  await loadRoster();
+  setInterval(() => {
+    if (!$('#login').hidden) loadRoster();
+  }, 10_000);
+}
+
+// ---- returning trainers -------------------------------------------------------
+
+function fmtAgo(ms) {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  if (s < 90) return 'just now';
+  const m = Math.floor(s / 60);
+  if (m < 90) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 36) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
+/** The server remembers every trainer; one click resumes as them. */
+async function loadRoster() {
+  let users;
+  try {
+    users = (await (await fetch('/api/users')).json()).users;
+  } catch {
+    return; // server unreachable; leave the section as-is
+  }
+  $('#returning').hidden = !users?.length;
+  if (!users?.length) return;
+
+  const list = $('#user-list');
+  list.innerHTML = '';
+  for (const u of users) {
+    const chip = document.createElement('button');
+    chip.className = 'user-chip';
+    chip.dataset.name = u.name;
+    const where = mapName(u.g, u.n);
+    const dot = document.createElement('span');
+    dot.className = `dot ${u.online ? 'on' : 'off'}`;
+    const name = document.createElement('span');
+    name.className = 'uname';
+    name.textContent = u.name;
+    const loc = document.createElement('span');
+    loc.className = 'uloc';
+    if (u.online) {
+      chip.disabled = true;
+      loc.textContent = where ? `playing now · ${where}` : 'playing now';
+    } else {
+      chip.disabled = !joinReady;
+      const ago = u.lastSeenAt ? fmtAgo(Date.now() - u.lastSeenAt) : '';
+      loc.textContent = [where, ago].filter(Boolean).join(' · ') || 'never played';
+      chip.onclick = () => joinNow(u.name);
+    }
+    chip.append(dot, name, loc);
+    list.append(chip);
   }
 }
 
@@ -297,17 +356,20 @@ function wireGameControls(adapter, socket, ui) {
 
 // ---- entry ---------------------------------------------------------------------
 
-$('#btn-join').onclick = async () => {
+async function joinNow(name = null) {
+  if (name) $('#name').value = name;
   $('#btn-join').disabled = true;
   $('#btn-join').textContent = 'Loading…';
   try {
     await start('mgba', await fetchRomFile());
   } catch (err) {
-    $('#btn-join').disabled = false;
+    $('#btn-join').disabled = !joinReady;
     $('#btn-join').textContent = 'Join the game';
     $('#rom-status').textContent = String(err.message ?? err);
   }
-};
+}
+
+$('#btn-join').onclick = () => joinNow();
 $('#btn-demo').onclick = () => start('demo');
 $('#rom').onchange = (e) => {
   const file = e.target.files?.[0];

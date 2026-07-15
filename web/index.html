@@ -25,6 +25,13 @@
       <label for="name">Trainer name</label>
       <input id="name" maxlength="16" placeholder="Your name" autocomplete="off" />
       <button id="btn-join" class="primary" disabled>Join the game</button>
+
+      <!-- returning trainers, straight from the server's registry -->
+      <div id="returning" hidden>
+        <p class="divider"><span>or continue as</span></p>
+        <div id="user-list"></div>
+      </div>
+
       <p id="rom-status" class="hint">Checking for the game build…</p>
       <p id="ctx-warning" class="hint warn" hidden>
         This address can't run the real game — open the
@@ -142,7 +149,7 @@
       <button id="sidebar-tab" title="Players online">👥</button>
       <div id="sidebar-body">
         <div class="panel">
-          <h3>Online</h3>
+          <h3>Trainers</h3>
           <ul id="players"></ul>
         </div>
         <div class="panel">

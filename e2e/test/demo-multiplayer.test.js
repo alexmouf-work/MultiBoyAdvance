@@ -165,6 +165,24 @@ test('two browsers share one world end-to-end', async () => {
     { timeout: 5000 },
   );
 
+  // --- join screen roster: the server remembers both trainers, shows their
+  // status + location, and playing trainers are not clickable ---
+  const roster = await browser.newPage();
+  await roster.goto(baseUrl);
+  await roster.waitForSelector('.user-chip', { timeout: 5000 });
+  const chips = await roster.$$eval('.user-chip', (els) => els.map((el) => ({
+    name: el.querySelector('.uname').textContent,
+    loc: el.querySelector('.uloc').textContent,
+    disabled: el.disabled,
+  })));
+  for (const who of ['Ann', 'Ben']) {
+    const chip = chips.find((c) => c.name === who);
+    assert.ok(chip, `${who} appears in the join-screen roster`);
+    assert.equal(chip.disabled, true, 'online trainers are not clickable');
+    assert.match(chip.loc, /playing now · Littleroot Town/); // demo map is (0,9)
+  }
+  await roster.close();
+
   await ann.close();
   await ben.close();
 });

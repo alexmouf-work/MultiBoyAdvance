@@ -147,6 +147,28 @@ test('http host serves the web client with cross-origin isolation headers', asyn
   srv.close();
 });
 
+test('/api/users lists the trainer registry for the join screen', async () => {
+  const srv = createServers(testCfg());
+  await new Promise((r) => srv.httpServer.listen(0, '127.0.0.1', r));
+  const port = srv.httpServer.address().port;
+
+  const empty = await (await fetch(`http://127.0.0.1:${port}/api/users`)).json();
+  assert.deepEqual(empty.users, []);
+
+  const zoe = srv.world.addClient({ name: 'Zoe' }, () => {});
+  srv.world.handle(zoe, { t: 'pos', g: 0, n: 18, x: 3, y: 3, f: 0, s: 0 });
+  const online = await (await fetch(`http://127.0.0.1:${port}/api/users`)).json();
+  assert.equal(online.users[0].name, 'Zoe');
+  assert.equal(online.users[0].online, true);
+  assert.deepEqual([online.users[0].g, online.users[0].n], [0, 18]);
+
+  srv.world.removeClient(zoe);
+  const offline = await (await fetch(`http://127.0.0.1:${port}/api/users`)).json();
+  assert.equal(offline.users[0].online, false);
+  assert.ok(offline.users[0].lastSeenAt <= Date.now());
+  srv.close();
+});
+
 test('/rom/mba.gba serves the host build fresh, 404s when absent', async () => {
   const cfg = testCfg();
   const romDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mba-rom-'));

@@ -40,6 +40,14 @@ export function createServers(cfg = config) {
   const requestHandler = (req, res) => {
     const url = new URL(req.url, 'http://x');
 
+    // Trainer roster for the join screen: every known player, online status,
+    // and last/current location. Read-only; docs/PROTOCOL.md §2.4.
+    if (url.pathname === '/api/users') {
+      res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+      res.end(JSON.stringify({ users: world.usersSnapshot() }));
+      return;
+    }
+
     // The host's current ROM build — always the latest, straight from disk.
     if (url.pathname === '/rom/mba.gba') {
       fs.readFile(cfg.romFile ?? '', (err, data) => {

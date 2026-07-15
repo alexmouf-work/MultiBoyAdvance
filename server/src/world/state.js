@@ -1,4 +1,5 @@
-// Authoritative shared world state (story flags + vars) with debounced
+// Authoritative shared world state (story flags + vars) and the trainer
+// registry (returning players + their last position), with debounced
 // JSON-file persistence. docs/PROTOCOL.md §2.3.
 
 import fs from 'node:fs';
@@ -14,6 +15,9 @@ export class WorldState {
     this.saveDelayMs = saveDelayMs;
     this.flags = new Set();
     this.vars = new Map();
+    /** @type {Map<string, {name, createdAt, lastSeenAt, g?, n?, x?, y?}>}
+     *  key = lowercased name; one record per trainer, ever. */
+    this.users = new Map();
     this._timer = null;
     if (file) this._load();
   }
@@ -23,6 +27,7 @@ export class WorldState {
       const raw = JSON.parse(fs.readFileSync(this.file, 'utf8'));
       for (const f of raw.flags ?? []) this.flags.add(f);
       for (const [id, v] of raw.vars ?? []) this.vars.set(id, v);
+      for (const u of raw.users ?? []) if (u?.name) this.users.set(u.name.toLowerCase(), u);
     } catch {
       // first run or unreadable snapshot: start empty
     }
@@ -46,7 +51,28 @@ export class WorldState {
   }
 
   snapshot() {
-    return { flags: [...this.flags], vars: [...this.vars.entries()] };
+    return { flags: [...this.flags], vars: [...this.vars.entries()], users: [...this.users.values()] };
+  }
+
+  /** Find-or-create the persistent record for a trainer name; bumps lastSeenAt. */
+  touchUser(name, now = Date.now()) {
+    const key = name.toLowerCase();
+    let u = this.users.get(key);
+    if (!u) {
+      u = { name, createdAt: now, lastSeenAt: now };
+      this.users.set(key, u);
+    }
+    u.lastSeenAt = now;
+    this._scheduleSave();
+    return u;
+  }
+
+  /** Remember where a trainer is, so the join screen can show it later. */
+  updateUserPos(name, g, n, x, y, now = Date.now()) {
+    const u = this.users.get(name.toLowerCase());
+    if (!u) return;
+    Object.assign(u, { g, n, x, y, lastSeenAt: now });
+    this._scheduleSave();
   }
 
   /** @returns {boolean} true if this is new information worth broadcasting */

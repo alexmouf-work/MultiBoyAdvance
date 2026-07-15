@@ -78,6 +78,7 @@ export class World {
     const client = new Client(id, slot, name, send);
     this.clients.set(slot, client);
     this.resumable.set(id, slot);
+    this.state.touchUser(name); // persistent trainer record (join screen roster)
 
     client.send({
       t: 'welcome',
@@ -86,23 +87,41 @@ export class World {
       players: [...this.clients.values()]
         .filter((c) => c !== client)
         .map((c) => ({ slot: c.slot, name: c.name, onlineMs: Date.now() - c.joinedAt })),
+      users: this.usersSnapshot(),
       flags: [...this.state.flags],
       vars: [...this.state.vars.entries()],
       speed: this.speed,
     });
     this._broadcast({ t: 'join', slot, name }, client);
+    this._broadcast({ t: 'users', users: this.usersSnapshot() }, client);
     return client;
   }
 
   removeClient(client) {
     if (this.clients.get(client.slot) !== client) return;
     this.clients.delete(client.slot);
+    this.state.touchUser(client.name); // stamp lastSeenAt for "last seen … ago"
     this._broadcast({ t: 'leave', slot: client.slot });
+    this._broadcast({ t: 'users', users: this.usersSnapshot() });
     this._despawnGhost(client, client.map);
     for (const session of this.battles.values()) {
       const i = session.participants.indexOf(client);
       if (i >= 0) session.participants.splice(i, 1);
     }
+  }
+
+  /** Every trainer ever seen, with online status and last/current location. */
+  usersSnapshot() {
+    const online = new Map();
+    for (const c of this.clients.values()) online.set(c.name.toLowerCase(), c);
+    return [...this.state.users.values()]
+      .map((u) => {
+        const c = online.get(u.name.toLowerCase());
+        return c
+          ? { name: c.name, online: true, slot: c.slot, g: c.map?.g, n: c.map?.n, x: c.pos.x, y: c.pos.y }
+          : { name: u.name, online: false, g: u.g, n: u.n, x: u.x, y: u.y, lastSeenAt: u.lastSeenAt };
+      })
+      .sort((a, b) => Number(b.online) - Number(a.online) || (b.lastSeenAt ?? 0) - (a.lastSeenAt ?? 0));
   }
 
   // ---- message routing ------------------------------------------------------
@@ -138,6 +157,7 @@ export class World {
     const prevMap = client.map;
     const map = { g: msg.g, n: msg.n };
     client.pos = { x: msg.x, y: msg.y, f: msg.f, s: msg.s };
+    this.state.updateUserPos(client.name, msg.g, msg.n, msg.x, msg.y);
     const mapChanged = !prevMap || prevMap.g !== map.g || prevMap.n !== map.n;
     client.map = map;
 
