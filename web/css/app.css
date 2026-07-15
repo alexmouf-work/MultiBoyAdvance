@@ -207,6 +207,8 @@ button.ghost { background: transparent; }
 }
 #speed-menu button { min-width: 64px; border: none; }
 #speed-menu button.on { background: var(--accent); color: #fff; }
+/* author display beats the hidden attribute's UA rule — restore it */
+#speed-menu[hidden] { display: none; }
 
 #demo-controls { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
 
@@ -294,15 +296,26 @@ body.touch #touch { display: block; }
   font-size: calc(14px * var(--ps));
 }
 
-#dpad { position: relative; width: calc(168px * var(--ps)); height: calc(168px * var(--ps)); }
+/* Movement box matches the diamond box (196×196·ps) so the joystick/D-pad and
+   the button diamond sit at the same height, mirrored left/right — and the
+   L/R shoulders above them line up too. */
+#dpad { position: relative; width: calc(196px * var(--ps)); height: calc(196px * var(--ps)); }
 #dpad .pad { width: calc(56px * var(--ps)); height: calc(56px * var(--ps)); font-size: calc(18px * var(--ps)); }
-#dpad .up    { left: calc(56px * var(--ps)); top: 0; }
-#dpad .down  { left: calc(56px * var(--ps)); bottom: 0; }
-#dpad .left  { left: 0; top: calc(56px * var(--ps)); }
-#dpad .right { right: 0; top: calc(56px * var(--ps)); }
+#dpad .up    { left: calc(70px * var(--ps)); top: calc(14px * var(--ps)); }
+#dpad .down  { left: calc(70px * var(--ps)); bottom: calc(14px * var(--ps)); }
+#dpad .left  { left: calc(14px * var(--ps)); top: calc(70px * var(--ps)); }
+#dpad .right { right: calc(14px * var(--ps)); top: calc(70px * var(--ps)); }
 
-/* joystick mode replaces the d-pad in place */
-#joystick { position: relative; }
+/* joystick mode replaces the d-pad in place (same outer box, stick centered) */
+#joystick {
+  position: relative;
+  width: calc(196px * var(--ps));
+  height: calc(196px * var(--ps));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#joystick[hidden] { display: none; }
 #stick-base {
   position: relative;
   width: calc(150px * var(--ps));
@@ -374,7 +387,7 @@ body.touch #touch { display: block; }
   pointer-events: auto;
   opacity: 0.65;
 }
-#gamewrap:fullscreen #left-cluster, #gamewrap.fake-fullscreen #left-cluster { left: 18px; bottom: 20px; }
+#gamewrap:fullscreen #left-cluster, #gamewrap.fake-fullscreen #left-cluster { left: 20px; bottom: 20px; }
 #gamewrap:fullscreen #right-cluster, #gamewrap.fake-fullscreen #right-cluster { right: 20px; bottom: 20px; }
 
 /* fullscreen + "below" mode: the game shrinks to leave a real control strip —

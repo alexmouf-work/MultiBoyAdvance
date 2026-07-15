@@ -231,7 +231,7 @@ function wireGameControls(adapter, socket, ui) {
   // Fullscreen key map: WASD move, Z=A, X=B, Enter=Select, C=Start.
   // Capture phase + stopPropagation so the emulator's own bindings don't
   // double-fire on the same keys.
-  const FS_KEYS = { w: 'Up', a: 'Left', s: 'Down', d: 'Right', z: 'A', x: 'B', Enter: 'Select', c: 'Start' };
+  const FS_KEYS = { w: 'Up', a: 'Left', s: 'Down', d: 'Right', z: 'A', ' ': 'A', x: 'B', Enter: 'Select', c: 'Start' };
   const fsKey = (down) => (e) => {
     if (!inFullscreen()) return;
     const name = FS_KEYS[e.key.length === 1 ? e.key.toLowerCase() : e.key];
