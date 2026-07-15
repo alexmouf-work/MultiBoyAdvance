@@ -93,8 +93,6 @@ async function start(mode, romFile = null) {
 
   if (mode === 'demo') {
     $('#demo-controls').hidden = false;
-    $('#btn-battle').onclick = () => adapter.startEncounter();
-    $('#btn-flag').onclick = () => adapter.setStoryFlag(0x2a1);
     $('#btn-end-battle').onclick = () => adapter.endBattle(1);
   }
 }

@@ -86,8 +86,8 @@ test('two browsers share one world end-to-end', async () => {
     { timeout: 5000 },
   );
 
-  // --- shared story flag ---
-  await ann.click('#btn-flag');
+  // --- shared story flag (dev-harness call; the UI buttons were removed) ---
+  await ann.evaluate(() => window.mba.adapter.setStoryFlag(0x2a1));
   await ben.waitForFunction(
     () => window.mba.adapter.events.some((e) => e.t === 'flag.applied' && e.id === 0x2a1),
     null,
@@ -97,7 +97,7 @@ test('two browsers share one world end-to-end', async () => {
   assert.equal(srv.world.state.flags.has(0x2a1), true);
 
   // --- co-op battle: open -> offer -> join -> shared seed & order ---
-  await ann.click('#btn-battle');
+  await ann.evaluate(() => window.mba.adapter.startEncounter());
   await ben.waitForSelector('.offer button[data-action="join-battle"]', { timeout: 5000 });
   await ben.click('.offer button[data-action="join-battle"]');
 

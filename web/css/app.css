@@ -445,5 +445,10 @@ body.touch #touch { display: block; }
   max-width: 1000px;
   pointer-events: auto;
   padding: 4px 10px 10px;
+  /* the overlay-fullscreen rule sets display:block, which would stack the
+     clusters vertically — restore the below-mode row */
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
 }
 #gamewrap:fullscreen.controls-below .pad, #gamewrap.fake-fullscreen.controls-below .pad { opacity: 1; }
