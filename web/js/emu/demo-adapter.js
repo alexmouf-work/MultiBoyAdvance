@@ -146,6 +146,10 @@ export class DemoAdapter {
         case T.FLAG_APPLY:
           this.events.push({ t: 'flag.applied', id: dec.flag(payload).id });
           break;
+        case T.ADMIN:
+          // The real game applies these (net_admin.c); the demo just logs.
+          this.events.push({ t: 'admin', ...dec.admin(payload) });
+          break;
         case T.BATTLE_CMD: {
           const c = dec.battleCmd(payload);
           if (c.sub === 'start') {

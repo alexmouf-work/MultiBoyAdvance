@@ -26,6 +26,11 @@ void NetSendFullParty(void);
 // (emit-only; no effect on battle state).
 void NetOnTurnFinalized(void);
 
+// new_game.c hook (WarpToTruck) — multiplayer quick start: skip the intro,
+// mark the story machine done, grant dex/running shoes, default name/gender.
+// The starter Pokémon arrives via the web picker (NET_ADMIN_GIVE_MON).
+void NetQuickStart(void);
+
 // Ghost state for other players (net_overworld.c owns rendering in Phase 1).
 struct NetGhost
 {

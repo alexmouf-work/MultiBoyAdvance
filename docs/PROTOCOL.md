@@ -101,6 +101,7 @@ record self-delimiting). Types `0x01–0x7F` flow game→host, `0x80–0xFF` hos
 | 0x85 | `WARP` | mapGroup u8, mapNum u8, x s16, y s16 — teleport the local player (applied at next safe overworld frame) |
 | 0x86 | `ASSIGN` | slot u8 — server-assigned player slot (bridge also writes `playerSlot` in the header) |
 | 0x90 | `BATTLE_CMD` | sub u8, then: sub 1=START {seed u32, playerCount u8, order[4] u8, mode u8}; sub 2=TURN_INPUT {turn u8, fromSlot u8, action u8, moveSlot u8, target u8, extra u16}; sub 3=END {result u8}; sub 4=PARTY {count u8, count × 32-byte wire mons} — sent *before* START; the ROM stages it and injects at START (co-op), restoring the original party at END |
+| 0x91 | `ADMIN` | sub u8, then per-sub fields (§1.6) — console/server-initiated actions applied to the local game |
 
 ### 1.5 Wire mon (32 bytes, little-endian)
 
@@ -124,6 +125,21 @@ Normative C codec: `MonToWire`/`MonFromWire` in `rom/overlay/src/net_battle.c`.
 In wire JSON, a wire mon travels as `b` = array of 32 integers, alongside `lv`
 (duplicated from byte 20) so the server can apply the merge rule without
 parsing the blob.
+
+### 1.6 ADMIN subtypes (0x91, host → game)
+
+Console commands, trades, and the starter kit all land in the game through this
+one TLV. Normative C handler: `NetOnAdminCmd` in `rom/overlay/src/net_admin.c`.
+
+| Sub | Name | Payload after sub | Effect |
+|---|---|---|---|
+| 1 | `GIVE_ITEM` | itemId u16, qty u16 | `AddBagItem` |
+| 2 | `TAKE_ITEM` | itemId u16, qty u16 | `RemoveBagItem` (trade sender's side) |
+| 3 | `GIVE_MON` | species u16, level u8 | create + add to party (random IVs), then re-report the party |
+| 4 | `SET_LEVEL` | partySlot u8 (0-based), level u8 | set exp to the level threshold, recalc stats |
+| 5 | `GIVE_XP` | partySlot u8, xp u32 | add exp (capped at max), recalc stats |
+| 6 | `WILD_BATTLE` | species u16, level u8 | scripted wild battle; only fires from a quiet overworld frame |
+| 7 | `RESET_TRAINER` | trainerId u16 | clear the trainer's defeated flag (rewards stay awarded) |
 
 ---
 
@@ -151,9 +167,13 @@ Every message has `t` (type). Server assigns each connection an integer `slot`
 | `battle.join` | `sid` string | join battle session `sid` (spectate→control) |
 | `battle.input` | `sid`, `turn`, `a`, `move`, `tgt`, `x` | turn input |
 | `battle.end` | `sid`, `result` 1/2/3 | initiator reports outcome |
-| `tp` | `to` slot | teleport me to player `to` |
+| `tp` | `to` slot | ask to teleport to player `to` (they must accept — "/tpa" style) |
+| `tp.accept` | `from` slot | accept a pending teleport request (requests expire after 60 s) |
 | `pvp` | `to` slot | challenge player `to` |
 | `pvp.accept` | `from` slot | accept a challenge |
+| `trade.give` | `to` slot, `item` int, `qty` int | hand items to a nearby player (server relays `take_item`/`give_item` admin msgs) |
+| `starter` | `species` int (252/255/258) | new-player kit: chosen starter lv5 + 5 Poké Balls + 3 Potions (once per connection) |
+| `cmd` | `line` string (≤200 chars) | console command (see `/help`); server replies `cmd.result` |
 | `speed` | `x` int 1–4 | set the shared emulator speed — one world, one clock |
 | `ping` | — | keepalive (expect `pong`) |
 
@@ -169,8 +189,12 @@ Every message has `t` (type). Server assigns each connection an integer `slot`
 | `battle.start` | `sid`, `seed`, `order` [slots], `party` [summary mons], `partyWire` [[32 ints]] (co-op only), `bags` {slot:[...]} | session begins (merged party, shared seed, turn order) |
 | `battle.input` | `sid`, `turn`, `from`, `a`, `move`, `tgt`, `x` | relayed turn input |
 | `battle.end` | `sid`, `result`, `warp?` {g,n,x,y} | session over; optional respawn/return warp |
-| `warp` | `g,n,x,y` | teleport instruction (tp/pvp/whiteout) |
+| `warp` | `g,n,x,y` | teleport instruction (accepted tp / pvp / whiteout / `/warp`) |
 | `pvp.req` | `from` slot, `name` | incoming challenge |
+| `tp.req` | `from` slot, `name` | player `from` asks to teleport to you; reply `tp.accept` to allow it |
+| `admin` | `sub` string + per-sub fields | apply an admin action to your game; the bridge encodes it as ADMIN TLV §1.6 (`sub` strings: `give_item`, `take_item`, `give_mon`, `set_level`, `give_xp`, `wild_battle`, `reset_trainer`) |
+| `trade.recv` | `from` slot, `name`, `item`, `qty` | someone handed you items (UI notice; the bag change arrives via `admin`) |
+| `cmd.result` | `ok` bool, `msg` string | console command reply |
 | `speed` | `x` int 1–4 | authoritative shared speed; every bridge applies it to its emulator |
 | `pong` / `error` | — / `msg` | |
 
@@ -188,6 +212,13 @@ Every message has `t` (type). Server assigns each connection an integer `slot`
 - **Party merge rule**: participants sorted stable; from each, take its top
   `ceil(6 / N)` Pokémon by level (tie-break: earlier party position), then trim
   to 6 by highest level overall.
+- **Teleports are consensual**: `tp` never moves anyone by itself — the server
+  parks the request on the target for 60 s and only an explicit `tp.accept`
+  produces the `warp` (sent to the requester, at the target's position then).
+- **Console commands** (`cmd`) run under the friends-trust model: any connected
+  player may run them; the server validates arguments and routes `admin`
+  messages to the target bridge. `docs/PROTOCOL.md` intentionally does not gate
+  them behind roles — this is a private co-op world.
 
 ### 2.4 HTTP side-channel
 

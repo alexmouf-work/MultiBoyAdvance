@@ -170,6 +170,7 @@ button.ghost { background: transparent; }
 }
 
 #gamewrap {
+  position: relative; /* anchors toasts, proximity chip, starter modal, pads */
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -212,17 +213,96 @@ button.ghost { background: transparent; }
 
 #demo-controls { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
 
-#offers { display: flex; flex-direction: column; gap: 8px; width: min(600px, 94vw); }
+/* top-center toast stack over the game — works in fullscreen too, because
+   #offers lives inside #gamewrap */
+#offers {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(560px, 92%);
+  pointer-events: none;
+}
 .offer {
+  pointer-events: auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  background: var(--panel);
+  background: rgba(22, 27, 34, 0.95);
   border: 1px solid var(--accent);
   border-radius: 10px;
   padding: 10px 14px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  animation: toast-in 0.18s ease-out;
 }
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ghost proximity chip: bottom-center, between the pad clusters */
+#proximity {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 65;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  background: rgba(22, 27, 34, 0.95);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  padding: 6px 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+#proximity[hidden] { display: none; }
+#proximity #proximity-name { font-weight: 700; }
+#proximity button { padding: 4px 12px; font-size: 13px; border-radius: 999px; }
+#prox-give-form { display: flex; gap: 6px; align-items: center; }
+#prox-give-form[hidden] { display: none; }
+#prox-give-form input {
+  width: 76px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 4px 8px;
+  font-size: 13px;
+}
+
+/* starter picker: modal over the game for brand-new saves */
+#starter-modal {
+  position: absolute;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 10px;
+}
+#starter-modal[hidden] { display: none; }
+.starter-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 22px 26px;
+  text-align: center;
+  max-width: 94%;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+}
+.starter-card h2 { margin: 0 0 6px; }
+.starter-card p { margin: 0 0 16px; color: var(--dim); font-size: 14px; }
+.starter-row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.starter-row button { font-size: 16px; font-weight: 700; padding: 14px 18px; }
 
 .panel {
   background: var(--panel);
@@ -253,6 +333,28 @@ button.ghost { background: transparent; }
 #log li[data-t='error'] { color: var(--warn); }
 #log li[data-t^='battle'] { color: var(--text); }
 
+/* console panel */
+#console-out {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  max-height: 180px;
+  overflow: auto;
+  font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+#console-out li { white-space: pre-wrap; padding: 2px 0; border-bottom: 1px solid var(--line); color: var(--text); }
+#console-out li[data-ok='false'] { color: var(--warn); }
+#console-out li[data-ok='true'] { color: var(--ok); }
+#console-form input {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 8px 10px;
+  font: 13px ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
 /* ============ touch controls ============ */
 /* --ps scales every pad dimension (the "Size" slider writes it). */
 #touch {
@@ -265,6 +367,21 @@ button.ghost { background: transparent; }
 }
 body.touch #touch { display: block; }
 
+/* Overlay mode means overlay: the pads sit on top of the game display itself,
+   in or out of fullscreen. Only the pads take input, not the layer. */
+body.touch #gamewrap:not(.controls-below) #touch {
+  position: absolute;
+  inset: 0;
+  max-width: none;
+  min-height: 0;
+  pointer-events: none;
+  z-index: 20;
+}
+body.touch #gamewrap:not(.controls-below) .pad,
+body.touch #gamewrap:not(.controls-below) #stick-base {
+  pointer-events: auto;
+}
+
 .pad {
   position: absolute;
   display: flex;
@@ -275,10 +392,11 @@ body.touch #touch { display: block; }
   padding: 0;
   line-height: 1;
   border-radius: 50%;
-  border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.07);
-  color: var(--text);
+  border: 2px solid rgba(255, 255, 255, 0.55);
+  background: rgba(13, 17, 23, 0.78);
+  color: #fff;
   font-weight: 700;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
   user-select: none;
   -webkit-user-select: none;
   touch-action: none;
@@ -328,8 +446,8 @@ body.touch #touch { display: block; }
   width: calc(150px * var(--ps));
   height: calc(150px * var(--ps));
   border-radius: 50%;
-  border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.05);
+  border: 2px solid rgba(255, 255, 255, 0.55);
+  background: rgba(13, 17, 23, 0.6);
   touch-action: none;
 }
 #stick-knob {
@@ -340,8 +458,8 @@ body.touch #touch { display: block; }
   height: calc(62px * var(--ps));
   margin: calc(-31px * var(--ps)) 0 0 calc(-31px * var(--ps));
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.16);
-  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.35);
+  border: 2px solid rgba(255, 255, 255, 0.55);
 }
 #stick-base.live #stick-knob { background: var(--accent); }
 
@@ -395,6 +513,12 @@ body.touch #touch { display: block; }
 }
 #options-panel #pad-prefs { flex-direction: column; align-items: stretch; }
 #options-panel #pad-prefs > * { width: 100%; }
+/* the panel sits near the top of the screen, so the speed selector must open
+   downward there (upward would fall off the top edge) */
+#options-panel #speed-menu {
+  bottom: auto;
+  top: calc(100% + 8px);
+}
 
 /* ============ fullscreen (native or CSS fallback) ============ */
 #gamewrap:fullscreen, #gamewrap.fake-fullscreen {
@@ -417,9 +541,10 @@ body.touch #touch { display: block; }
   max-width: none;
   pointer-events: none; /* only the pads take input, not the layer */
 }
-#gamewrap:fullscreen .pad, #gamewrap.fake-fullscreen .pad {
+#gamewrap:fullscreen .pad, #gamewrap.fake-fullscreen .pad,
+#gamewrap:fullscreen #stick-base, #gamewrap.fake-fullscreen #stick-base {
   pointer-events: auto;
-  opacity: 0.65;
+  opacity: 0.85;
 }
 #gamewrap:fullscreen #left-cluster, #gamewrap.fake-fullscreen #left-cluster { left: 20px; bottom: 20px; }
 #gamewrap:fullscreen #right-cluster, #gamewrap.fake-fullscreen #right-cluster { right: 20px; bottom: 20px; }

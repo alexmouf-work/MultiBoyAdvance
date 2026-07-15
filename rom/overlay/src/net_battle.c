@@ -35,6 +35,7 @@ static EWRAM_DATA u8 sPendingParty[1 + PARTY_SIZE * NET_MON_WIRE_SIZE] = {0};
 static EWRAM_DATA struct Pokemon sPartyBackup[PARTY_SIZE] = {0};
 static bool8 sHavePendingParty;
 static bool8 sPartyInjected;
+static bool8 sSentInitialParty;
 static u16 sLastPartyChecksum;
 static u8 sPartyResendDelay;
 
@@ -193,8 +194,12 @@ void NetBattleTick(void)
         sum += GetMonData(&gPlayerParty[i], MON_DATA_HP, NULL);
         sum += GetMonData(&gPlayerParty[i], MON_DATA_PERSONALITY, NULL) & 0xFF;
     }
-    if (sum != sLastPartyChecksum)
+    // First online tick always reports, even an empty party (checksum 0 would
+    // otherwise match the zero-init and stay silent) — the web starter picker
+    // keys off that empty summary.
+    if (sum != sLastPartyChecksum || !sSentInitialParty)
     {
+        sSentInitialParty = TRUE;
         sLastPartyChecksum = sum;
         NetSendPartySummary();
         NetSendFullParty();

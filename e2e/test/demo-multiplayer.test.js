@@ -138,14 +138,30 @@ test('two browsers share one world end-to-end', async () => {
     { timeout: 5000 },
   );
 
-  // --- teleport via roster button ---
+  // --- teleport via roster button: "/tpa" style — Ann must accept first ---
   await ben.click(`#players li[data-slot="${annSlot}"] button[data-action="tp"]`);
+  await ann.waitForSelector('.offer button[data-action="tp-accept"]', { timeout: 5000 });
+  await ann.click('.offer button[data-action="tp-accept"]');
   await ben.waitForFunction(
     (pos) => {
       const me = window.mba.adapter.me;
       return me.x === pos.x && me.y === pos.y;
     },
     { x: 7, y: 6 },
+    { timeout: 5000 },
+  );
+
+  // --- ghost proximity: Ben now stands on Ann's tile, so the interaction
+  // chip (battle / give item) must surface ---
+  await ben.waitForSelector('#proximity:not([hidden])', { timeout: 5000 });
+
+  // --- console: a command typed by Ben lands in his game as an admin TLV ---
+  await ben.fill('#console-in', '/give me item 13 3');
+  await ben.press('#console-in', 'Enter');
+  await ben.waitForFunction(
+    () => window.mba.adapter.events.some(
+      (e) => e.t === 'admin' && e.sub === 'give_item' && e.item === 13 && e.qty === 3),
+    null,
     { timeout: 5000 },
   );
 

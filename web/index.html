@@ -51,6 +51,35 @@
     <div id="gamewrap">
       <canvas id="screen" width="480" height="320"></canvas>
 
+      <!-- top-center toasts: battle offers, teleport/PvP requests, trades.
+           Inside #gamewrap so they render in fullscreen too. -->
+      <div id="offers"></div>
+
+      <!-- ghost interaction: appears when another player stands next to you -->
+      <div id="proximity" hidden>
+        <span id="proximity-name"></span>
+        <button id="btn-prox-battle">Battle</button>
+        <button id="btn-prox-give">Give item</button>
+        <form id="prox-give-form" hidden>
+          <input id="prox-item" type="number" min="1" max="65535" placeholder="item id" />
+          <input id="prox-qty" type="number" min="1" max="999" value="1" />
+          <button type="submit">Send</button>
+        </form>
+      </div>
+
+      <!-- new players: pick a starter before heading out -->
+      <div id="starter-modal" hidden>
+        <div class="starter-card">
+          <h2>Choose your starter</h2>
+          <p>Every trainer sets out with one — plus 5 Poké Balls and 3 Potions.</p>
+          <div class="starter-row">
+            <button data-species="252">🌿 Treecko</button>
+            <button data-species="255">🔥 Torchic</button>
+            <button data-species="258">💧 Mudkip</button>
+          </div>
+        </div>
+      </div>
+
       <!-- fullscreen-only: opens the same controls the bar has outside -->
       <button id="btn-options">⚙ OPTIONS</button>
       <div id="options-panel"></div>
@@ -106,8 +135,6 @@
     <div id="demo-controls" hidden>
       <button id="btn-end-battle" hidden>Win battle</button>
     </div>
-
-    <div id="offers"></div>
     </div><!-- /#main -->
 
     <!-- drawer anchored to the right edge of the screen -->
@@ -121,6 +148,13 @@
         <div class="panel">
           <h3>Events</h3>
           <ul id="log"></ul>
+        </div>
+        <div class="panel" id="console-panel">
+          <h3>Console</h3>
+          <ul id="console-out"></ul>
+          <form id="console-form">
+            <input id="console-in" placeholder="/help" autocomplete="off" autocapitalize="off" spellcheck="false" />
+          </form>
         </div>
       </div>
     </aside>

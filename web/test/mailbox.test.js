@@ -127,3 +127,20 @@ test('full-party wire codec: round-trip and BATTLE_CMD PARTY framing', () => {
   assert.equal(framed.length, 2 + 6 * 32);
   assert.ok(framed.length <= 255);
 });
+
+test('admin codec: every sub round-trips through enc/dec', () => {
+  const cases = [
+    { sub: 'give_item', item: 13, qty: 3 },
+    { sub: 'take_item', item: 0xffff, qty: 999 },
+    { sub: 'give_mon', species: 252, level: 5 },
+    { sub: 'set_level', slot: 2, level: 100 },
+    { sub: 'give_xp', slot: 0, xp: 1_000_000 },
+    { sub: 'wild_battle', species: 384, level: 70 },
+    { sub: 'reset_trainer', trainer: 0x35f },
+  ];
+  for (const m of cases) {
+    assert.deepEqual(dec.admin(enc.admin(m)), m, m.sub);
+  }
+  assert.equal(enc.admin({ sub: 'bogus' }), null);
+  assert.equal(dec.admin(Uint8Array.from([99])).sub, 'unknown');
+});

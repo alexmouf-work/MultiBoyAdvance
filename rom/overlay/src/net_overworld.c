@@ -94,6 +94,17 @@ static void GhostPlaceSprite(struct Sprite *sprite, s16 tileX, s16 tileY)
     sprite->y += 16 + sprite->centerToCornerVecY;
 }
 
+// Destroy every ghost sprite now (before a warp/map teardown) and force a
+// clean re-track on the next overworld frame.
+void NetGhostsHideAll(void)
+{
+    u32 i;
+
+    for (i = 0; i < NET_MAX_PLAYERS; i++)
+        GhostDespawn(&gNetGhosts[i]);
+    sMapTracked = FALSE;
+}
+
 // One sprite per active ghost on the local player's current map.
 static void RenderGhosts(void)
 {

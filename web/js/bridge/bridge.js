@@ -17,6 +17,8 @@ export class Bridge {
   #sid = null; // current battle session id
   #status = 'searching';
   onStatus = () => {};
+  onParty = () => {}; // (mons summary) — UI starter picker keys off this
+  myPos = null; // our own last reported {g,n,x,y,f,s} (ghost proximity UI)
 
   constructor(adapter, socket) {
     this.#adapter = adapter;
@@ -95,6 +97,7 @@ export class Bridge {
         break;
       case T.PRESENCE: {
         const p = dec.presence(payload);
+        this.myPos = p;
         const key = `${p.g},${p.n},${p.x},${p.y},${p.f},${p.s}`;
         const now = performance.now();
         if (key === this.#lastPos.key) break;
@@ -114,9 +117,12 @@ export class Bridge {
         this.#socket.send({ t: 'var', id: v.id, v: v.v });
         break;
       }
-      case T.PARTY_SUMMARY:
-        this.#socket.send({ t: 'party', mons: dec.partySummary(payload) });
+      case T.PARTY_SUMMARY: {
+        const mons = dec.partySummary(payload);
+        this.onParty(mons);
+        this.#socket.send({ t: 'party', mons });
         break;
+      }
       case T.PARTY_FULL:
         this.#socket.send({ t: 'party.full', mons: dec.partyFull(payload) });
         break;
@@ -167,6 +173,10 @@ export class Bridge {
     s.on('battle.end', (m) => {
       this.#queueIn(T.BATTLE_CMD, enc.battleEnd(m.result));
       this.#sid = null;
+    });
+    s.on('admin', (m) => {
+      const payload = enc.admin(m);
+      if (payload) this.#queueIn(T.ADMIN, payload);
     });
   }
 

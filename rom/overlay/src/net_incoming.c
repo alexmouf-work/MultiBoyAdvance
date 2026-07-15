@@ -14,6 +14,8 @@ void NetApplyRemoteVar(u16 varId, u16 value);
 void NetQueueWarp(u8 mapGroup, u8 mapNum, s16 x, s16 y);
 // net_battle.c
 void NetOnBattleCmd(const u8 *payload, u8 len);
+// net_admin.c
+void NetOnAdminCmd(const u8 *payload, u8 len);
 
 #define RD_S16(p, i) ((s16)((p)[i] | ((p)[(i) + 1] << 8)))
 #define RD_U16(p, i) ((u16)((p)[i] | ((p)[(i) + 1] << 8)))
@@ -72,6 +74,9 @@ void NetApplyIncoming(void)
             break;
         case NET_MSG_BATTLE_CMD:
             NetOnBattleCmd(payload, len);
+            break;
+        case NET_MSG_ADMIN:
+            NetOnAdminCmd(payload, len);
             break;
         default:
             break; // forward-compatible: skip unknown types

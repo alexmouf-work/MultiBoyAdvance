@@ -16,4 +16,7 @@ struct WarpData { s8 mapGroup, mapNum, warpId; s16 x, y; };
 struct Location { u8 mapGroup, mapNum; };
 struct SaveBlock1 { struct { u8 mapGroup, mapNum; } location; };
 extern struct SaveBlock1 *gSaveBlock1Ptr;
+#define PLAYER_NAME_LENGTH 7
+struct SaveBlock2 { u8 playerName[PLAYER_NAME_LENGTH + 1]; u8 playerGender; };
+extern struct SaveBlock2 *gSaveBlock2Ptr;
 #endif

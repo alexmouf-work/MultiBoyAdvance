@@ -13,8 +13,12 @@ const CLIENT_MESSAGES = {
   'battle.input': ['turn', 'a'],
   'battle.end': ['result'],
   tp: ['to'],
+  'tp.accept': ['from'],
   pvp: ['to'],
   'pvp.accept': ['from'],
+  'trade.give': ['to', 'item', 'qty'],
+  starter: ['species'],
+  cmd: [], // line: string — checked in the handler
   speed: ['x'],
   ping: [],
 };

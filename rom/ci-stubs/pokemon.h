@@ -44,14 +44,22 @@ enum {
     MON_DATA_LEVEL,
     MON_DATA_HP,
     MON_DATA_MAX_HP,
+    MON_DATA_EXP,
 };
+
+#define MAX_LEVEL 100
 
 struct Pokemon { u8 raw[100]; };
 extern struct Pokemon gPlayerParty[PARTY_SIZE];
+
+struct SpeciesInfo { u8 growthRate; };
+extern const struct SpeciesInfo gSpeciesInfo[];
+extern const u32 gExperienceTables[][MAX_LEVEL + 1];
 
 u32 GetMonData(struct Pokemon *mon, s32 field, u8 *data);
 void SetMonData(struct Pokemon *mon, s32 field, const void *dataArg);
 void CreateMon(struct Pokemon *mon, u16 species, u8 level, u8 fixedIV, u8 hasFixedPersonality, u32 fixedPersonality, u8 otIdType, u32 fixedOtId);
 void CalculateMonStats(struct Pokemon *mon);
+u8 GiveMonToPlayer(struct Pokemon *mon);
 void ZeroPlayerPartyMons(void);
 u8 CalculatePlayerPartyCount(void);

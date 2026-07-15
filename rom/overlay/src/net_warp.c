@@ -3,11 +3,16 @@
 // overworld frame, using the same primitives field scripts use.
 
 #include "global.h"
+#include "field_player_avatar.h" // StopPlayerAvatar
 #include "field_screen_effect.h" // DoWarp
 #include "main.h"
 #include "overworld.h"
+#include "script.h" // ArePlayerFieldControlsLocked
 #include "net/mailbox.h"
 #include "net/net.h"
+
+// net_overworld.c: drop ghost sprites before the map tears down.
+void NetGhostsHideAll(void);
 
 static struct
 {
@@ -31,10 +36,15 @@ void NetWarpTick(void)
 {
     if (!sWarp.pending)
         return;
-    if (gMain.callback2 != CB2_Overworld)
-        return; // wait for a safe frame (not in battle/menu/script transition)
+    // Only fire from a quiet overworld frame: not in battle/menus, and not
+    // while a script/dialog/another warp holds the field controls — warping
+    // mid-script tears the map state (symptom: corrupted "flashing" tiles).
+    if (gMain.callback2 != CB2_Overworld || ArePlayerFieldControlsLocked())
+        return;
 
     sWarp.pending = FALSE;
+    NetGhostsHideAll(); // our sprites must not outlive the map they're on
+    StopPlayerAvatar();
     SetWarpDestination(sWarp.mapGroup, sWarp.mapNum, WARP_ID_NONE, sWarp.x, sWarp.y);
-    DoWarp();
+    DoWarp(); // locks field controls itself; the warp-exit callback unlocks
 }

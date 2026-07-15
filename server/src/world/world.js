@@ -6,8 +6,15 @@ import crypto from 'node:crypto';
 import { WorldState } from './state.js';
 import { BattleSession } from '../battle/session.js';
 import { inRanges } from '../protocol.js';
+import { runCommand } from '../commands.js';
 
 const DESPAWN_STATE = 255;
+const TP_REQUEST_TTL_MS = 60_000;
+
+// Hoenn starters + the kit every new player gets alongside one.
+const STARTER_SPECIES = new Set([252, 255, 258]); // Treecko, Torchic, Mudkip
+const ITEM_POKE_BALL = 4;
+const ITEM_POTION = 13;
 
 /** One connected player, wrapped over whatever transport delivered it. */
 class Client {
@@ -20,6 +27,8 @@ class Client {
     this.pos = { x: 0, y: 0, f: 0, s: 0 };
     this.party = []; // latest party summary [{sp,lv,hp}]
     this.fullMons = []; // latest full wire mons [{lv, b:[32 ints]}]
+    this.tpRequests = new Map(); // requester slot -> timestamp (awaiting our accept)
+    this.starterGiven = false;
     this.joinedAt = Date.now();
     this.lastSeen = Date.now();
   }
@@ -112,8 +121,12 @@ export class World {
       case 'battle.input': return this._onBattleInput(client, msg);
       case 'battle.end': return this._onBattleEnd(client, msg);
       case 'tp': return this._onTeleport(client, msg);
+      case 'tp.accept': return this._onTpAccept(client, msg);
       case 'pvp': return this._onPvp(client, msg);
       case 'pvp.accept': return this._onPvpAccept(client, msg);
+      case 'trade.give': return this._onTradeGive(client, msg);
+      case 'starter': return this._onStarter(client, msg);
+      case 'cmd': return this._onCmd(client, msg);
       case 'speed': return this._onSpeed(client, msg);
       case 'ping': return client.send({ t: 'pong' });
     }
@@ -238,10 +251,27 @@ export class World {
 
   // ---- social --------------------------------------------------------------------
 
+  // Teleport is consensual ("/tpa" style): the requester asks, the target
+  // accepts, and only then does the requester get warped to the target.
   _onTeleport(client, msg) {
     const target = this.clients.get(msg.to);
-    if (!target?.map) return client.send({ t: 'error', msg: 'player not available' });
-    client.send({ t: 'warp', g: target.map.g, n: target.map.n, x: target.pos.x, y: target.pos.y });
+    if (!target || target === client) return client.send({ t: 'error', msg: 'player not available' });
+    this.requestTeleport(client, target);
+  }
+
+  /** Ask `target` to let `from` teleport to them. Also used by /tp in commands.js. */
+  requestTeleport(from, target) {
+    target.tpRequests.set(from.slot, Date.now());
+    target.send({ t: 'tp.req', from: from.slot, name: from.name });
+  }
+
+  _onTpAccept(client, msg) {
+    const asked = client.tpRequests.get(msg.from);
+    client.tpRequests.delete(msg.from);
+    if (asked === undefined || Date.now() - asked > TP_REQUEST_TTL_MS) return;
+    const requester = this.clients.get(msg.from);
+    if (!requester || !client.map) return;
+    requester.send({ t: 'warp', g: client.map.g, n: client.map.n, x: client.pos.x, y: client.pos.y });
   }
 
   _onPvp(client, msg) {
@@ -257,6 +287,39 @@ export class World {
     this.battles.set(session.sid, session);
     session.join(client);
     session.startNow();
+  }
+
+  // Ghost interaction: hand an item to a nearby player. The item leaves the
+  // giver's bag and lands in the receiver's — both via the admin mailbox path.
+  _onTradeGive(client, msg) {
+    const target = this.clients.get(msg.to);
+    const item = msg.item | 0;
+    const qty = msg.qty | 0;
+    if (!target || target === client) return client.send({ t: 'error', msg: 'player not available' });
+    if (item < 1 || item > 0xffff || qty < 1 || qty > 999) return client.send({ t: 'error', msg: 'bad item/qty' });
+    client.send({ t: 'admin', sub: 'take_item', item, qty });
+    target.send({ t: 'admin', sub: 'give_item', item, qty });
+    target.send({ t: 'trade.recv', from: client.slot, name: client.name, item, qty });
+  }
+
+  // New-player kit: chosen starter at lv5, plus balls and potions. One per
+  // connection; the real guard is the game save (picker only shows when the
+  // party is empty).
+  _onStarter(client, msg) {
+    if (client.starterGiven) return;
+    if (!STARTER_SPECIES.has(msg.species)) return client.send({ t: 'error', msg: 'not a starter' });
+    client.starterGiven = true;
+    client.send({ t: 'admin', sub: 'give_mon', species: msg.species, level: 5 });
+    client.send({ t: 'admin', sub: 'give_item', item: ITEM_POKE_BALL, qty: 5 });
+    client.send({ t: 'admin', sub: 'give_item', item: ITEM_POTION, qty: 3 });
+  }
+
+  _onCmd(client, msg) {
+    if (typeof msg.line !== 'string' || msg.line.length > 200) {
+      return client.send({ t: 'cmd.result', ok: false, msg: 'bad command line' });
+    }
+    const { ok, msg: text } = runCommand(this, client, msg.line);
+    client.send({ t: 'cmd.result', ok, msg: text });
   }
 
   _onSpeed(client, msg) {

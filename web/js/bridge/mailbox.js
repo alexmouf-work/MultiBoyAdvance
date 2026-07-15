@@ -32,6 +32,7 @@ export const T = {
   WARP: 0x85,
   ASSIGN: 0x86,
   BATTLE_CMD: 0x90,
+  ADMIN: 0x91,
 };
 
 export const GAME_STATE = { BOOT: 0, OVERWORLD: 1, BATTLE: 2, MENU: 3, OTHER: 4 };
@@ -172,6 +173,20 @@ export const enc = {
   battleTurnRelay: (turn, from, a, move, tgt, x) =>
     Uint8Array.from([2, turn, from, a, move, tgt, x & 0xff, (x ?? 0) >> 8]),
   battleEnd: (result) => Uint8Array.from([3, result]),
+  // Console/admin commands (§1.6). Field layout mirrors net_admin.c exactly.
+  admin: (m) => {
+    switch (m.sub) {
+      case 'give_item': return Uint8Array.from([1, m.item & 0xff, m.item >> 8, m.qty & 0xff, m.qty >> 8]);
+      case 'take_item': return Uint8Array.from([2, m.item & 0xff, m.item >> 8, m.qty & 0xff, m.qty >> 8]);
+      case 'give_mon': return Uint8Array.from([3, m.species & 0xff, m.species >> 8, m.level]);
+      case 'set_level': return Uint8Array.from([4, m.slot, m.level]);
+      case 'give_xp':
+        return Uint8Array.from([5, m.slot, m.xp & 0xff, (m.xp >>> 8) & 0xff, (m.xp >>> 16) & 0xff, (m.xp >>> 24) & 0xff]);
+      case 'wild_battle': return Uint8Array.from([6, m.species & 0xff, m.species >> 8, m.level]);
+      case 'reset_trainer': return Uint8Array.from([7, m.trainer & 0xff, m.trainer >> 8]);
+      default: return null;
+    }
+  },
 };
 
 export const dec = {
@@ -222,6 +237,18 @@ export const dec = {
         }
         return { sub: 'party', mons };
       }
+      default: return { sub: 'unknown' };
+    }
+  },
+  admin: (p) => {
+    switch (p[0]) {
+      case 1: return { sub: 'give_item', item: readU16(p, 1), qty: readU16(p, 3) };
+      case 2: return { sub: 'take_item', item: readU16(p, 1), qty: readU16(p, 3) };
+      case 3: return { sub: 'give_mon', species: readU16(p, 1), level: p[3] };
+      case 4: return { sub: 'set_level', slot: p[1], level: p[2] };
+      case 5: return { sub: 'give_xp', slot: p[1], xp: (p[2] | (p[3] << 8) | (p[4] << 16) | (p[5] << 24)) >>> 0 };
+      case 6: return { sub: 'wild_battle', species: readU16(p, 1), level: p[3] };
+      case 7: return { sub: 'reset_trainer', trainer: readU16(p, 1) };
       default: return { sub: 'unknown' };
     }
   },

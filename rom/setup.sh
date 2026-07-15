@@ -81,6 +81,16 @@ fi
 applied 'NetOnTurnFinalized();' src/battle_main.c && say "  ✅ battle_main.c: turn-finalized hook" \
   || die "turn hook did not apply — add manually (rom/README.md §Hooks)"
 
+# 3f. new_game.c: multiplayer quick start — new games skip the truck/intro,
+# spawn in Littleroot with the story machine done (starter comes via the web picker)
+if ! applied 'NetQuickStart' src/new_game.c; then
+  hook src/new_game.c 'MAP_INSIDE_OF_TRUCK' "multiplayer quick start"
+  sed -i '0,/^#include/s//#include "net\/net.h"\n&/' "$PKE/src/new_game.c"
+  perl -0pi -e 's/    SetWarpDestination\(MAP_GROUP\(MAP_INSIDE_OF_TRUCK\), MAP_NUM\(MAP_INSIDE_OF_TRUCK\), WARP_ID_NONE, -1, -1\);/    NetQuickStart();\n    SetWarpDestination(MAP_GROUP(MAP_LITTLEROOT_TOWN), MAP_NUM(MAP_LITTLEROOT_TOWN), WARP_ID_NONE, 10, 12);/' "$PKE/src/new_game.c"
+fi
+applied 'NetQuickStart();' src/new_game.c && say "  ✅ new_game.c: multiplayer quick start" \
+  || die "quick start hook did not apply — add manually (rom/README.md §Hooks)"
+
 # --- 4. build -----------------------------------------------------------------------
 say "building (make modern)…"
 make -C "$PKE" modern -j"$(nproc)"

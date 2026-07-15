@@ -132,15 +132,32 @@ test('battle: solo initiator dissolves silently after window', async () => {
   world.close();
 });
 
-test('teleport resolves to target position; pvp handshake starts immediately', () => {
+test('teleport is request/accept: warp lands only after the target accepts', () => {
   const world = new World(makeCfg());
   const a = join(world, 'A');
   const b = join(world, 'B');
   world.handle(b.client, { t: 'pos', g: 3, n: 7, x: 21, y: 9, f: 0, s: 0 });
 
   world.handle(a.client, { t: 'tp', to: 1 });
+  assert.equal(msgs(a.inbox, 'warp').length, 0, 'no warp before the target accepts');
+  const req = msgs(b.inbox, 'tp.req')[0];
+  assert.equal(req.from, 0);
+  assert.equal(req.name, 'A');
+
+  world.handle(b.client, { t: 'tp.accept', from: 0 });
   const warp = msgs(a.inbox, 'warp')[0];
   assert.deepEqual([warp.g, warp.n, warp.x, warp.y], [3, 7, 21, 9]);
+
+  // an accept with no pending request does nothing
+  world.handle(b.client, { t: 'tp.accept', from: 0 });
+  assert.equal(msgs(a.inbox, 'warp').length, 1);
+  world.close();
+});
+
+test('pvp handshake starts immediately on accept', () => {
+  const world = new World(makeCfg());
+  const a = join(world, 'A');
+  const b = join(world, 'B');
 
   world.handle(a.client, { t: 'pvp', to: 1 });
   assert.equal(msgs(b.inbox, 'pvp.req')[0].from, 0);
@@ -148,6 +165,69 @@ test('teleport resolves to target position; pvp handshake starts immediately', (
   const start = msgs(a.inbox, 'battle.start')[0];
   assert.equal(start.mode, 'pvp');
   assert.equal(start.party, null); // pvp: real parties, no merge
+  world.close();
+});
+
+test('console commands route admin messages and reply with cmd.result', () => {
+  const world = new World(makeCfg());
+  const a = join(world, 'Alex');
+  const b = join(world, 'Sam');
+
+  world.handle(a.client, { t: 'cmd', line: '/give sam item 13 3' });
+  assert.equal(msgs(a.inbox, 'cmd.result')[0].ok, true);
+  assert.deepEqual(msgs(b.inbox, 'admin')[0], { t: 'admin', sub: 'give_item', item: 13, qty: 3 });
+
+  world.handle(a.client, { t: 'cmd', line: '/give p2 mon 252 10' });
+  assert.deepEqual(msgs(b.inbox, 'admin')[1], { t: 'admin', sub: 'give_mon', species: 252, level: 10 });
+
+  world.handle(a.client, { t: 'cmd', line: '/setlevel me 1 42' });
+  assert.deepEqual(msgs(a.inbox, 'admin')[0], { t: 'admin', sub: 'set_level', slot: 0, level: 42 });
+
+  world.handle(a.client, { t: 'cmd', line: '/battle sam wild 300 25' });
+  assert.deepEqual(msgs(b.inbox, 'admin')[2], { t: 'admin', sub: 'wild_battle', species: 300, level: 25 });
+
+  world.handle(a.client, { t: 'cmd', line: '/resettrainer me 621' });
+  assert.deepEqual(msgs(a.inbox, 'admin')[1], { t: 'admin', sub: 'reset_trainer', trainer: 621 });
+
+  world.handle(a.client, { t: 'cmd', line: '/warp 1 4 10 12' });
+  assert.deepEqual(msgs(a.inbox, 'warp')[0], { t: 'warp', g: 1, n: 4, x: 10, y: 12 });
+
+  // /tp goes through the same request/accept flow as the sidebar button
+  world.handle(a.client, { t: 'cmd', line: '/tp sam' });
+  assert.equal(msgs(b.inbox, 'tp.req')[0].from, 0);
+
+  world.handle(a.client, { t: 'cmd', line: '/give nobody item 1' });
+  assert.equal(msgs(a.inbox, 'cmd.result').at(-1).ok, false);
+
+  world.handle(a.client, { t: 'cmd', line: '/nonsense' });
+  assert.match(msgs(a.inbox, 'cmd.result').at(-1).msg, /unknown command/);
+  world.close();
+});
+
+test('trade.give moves items between bags; starter kit is once per connection', () => {
+  const world = new World(makeCfg());
+  const a = join(world, 'A');
+  const b = join(world, 'B');
+
+  world.handle(a.client, { t: 'trade.give', to: 1, item: 13, qty: 2 });
+  assert.deepEqual(msgs(a.inbox, 'admin')[0], { t: 'admin', sub: 'take_item', item: 13, qty: 2 });
+  assert.deepEqual(msgs(b.inbox, 'admin')[0], { t: 'admin', sub: 'give_item', item: 13, qty: 2 });
+  assert.equal(msgs(b.inbox, 'trade.recv')[0].from, 0);
+
+  world.handle(a.client, { t: 'trade.give', to: 0, item: 13, qty: 2 }); // self
+  assert.equal(msgs(a.inbox, 'error').length, 1);
+
+  world.handle(b.client, { t: 'starter', species: 258 });
+  const admins = msgs(b.inbox, 'admin');
+  assert.deepEqual(admins[1], { t: 'admin', sub: 'give_mon', species: 258, level: 5 });
+  assert.equal(admins[2].sub, 'give_item'); // poké balls
+  assert.equal(admins[3].sub, 'give_item'); // potions
+
+  world.handle(b.client, { t: 'starter', species: 252 }); // second ask: ignored
+  assert.equal(msgs(b.inbox, 'admin').length, 4);
+
+  world.handle(a.client, { t: 'starter', species: 999 }); // not a starter
+  assert.equal(msgs(a.inbox, 'error').length, 2);
   world.close();
 });
 

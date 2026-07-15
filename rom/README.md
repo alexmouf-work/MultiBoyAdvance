@@ -3,7 +3,7 @@
 This directory turns [pret/pokeemerald](https://github.com/pret/pokeemerald)
 into the MultiBoyAdvance game. Nothing of Nintendo's is stored here: `setup.sh`
 clones the decompilation at build time (the clone and any built ROM are
-gitignored), copies our **overlay** in, applies three small **hooks**, and
+gitignored), copies our **overlay** in, applies five small **hooks**, and
 builds. Personal use only; never distribute the ROM.
 
 ```
@@ -12,7 +12,7 @@ rom/
 ├── overlay/
 │   ├── include/net/    # mailbox.h (protocol-normative), net.h (public hooks)
 │   └── src/            # net_mailbox.c, net_incoming.c, net_overworld.c,
-│                       # net_flags.c, net_warp.c, net_battle.c
+│                       # net_flags.c, net_warp.c, net_battle.c, net_admin.c
 └── lua/mba-bridge.lua  # desktop-mGBA bridge (same protocol as the browser)
 ```
 
@@ -50,6 +50,13 @@ pokeemerald drifts and an anchor is missing, apply by hand:
    `NetOnTurnFinalized();` at the top of
    `CheckFocusPunch_ClearVarsBeforeTurnStarts` (runs once per turn after all
    action/move choices are locked; the hook is emit-only).
+5. **`src/new_game.c`** — add `#include "net/net.h"`; in `WarpToTruck`, replace
+   the `SetWarpDestination(MAP_GROUP(MAP_INSIDE_OF_TRUCK), …, -1, -1)` line
+   with `NetQuickStart();` followed by
+   `SetWarpDestination(MAP_GROUP(MAP_LITTLEROOT_TOWN), MAP_NUM(MAP_LITTLEROOT_TOWN), WARP_ID_NONE, 10, 12);`
+   — new games skip the truck intro and spawn in Littleroot with the story
+   machine pre-completed (default name, running shoes, Pokédex); the starter
+   arrives through the web picker (ADMIN `GIVE_MON`).
 
 Everything else lives in overlay files that compile standalone (pokeemerald's
 Makefile globs `src/*.c`).
@@ -66,6 +73,8 @@ Makefile globs `src/*.c`).
 | **Full-party transfer & merged-party injection** — 32-byte wire mons (PROTOCOL §1.5) sent on change; server-merged party staged via BATTLE_CMD PARTY, injected into `gPlayerParty` at co-op START (original party backed up), restored at END | ✅ complete (`net_battle.c`) |
 | **Ghost rendering** — a sprite per remote player in the overworld | ✅ complete (`net_overworld.c`): camera-tracked player sprites (Brendan/May by slot), facing anims, map-scoped spawn/despawn, stale-id invalidation across map loads. Tile-snapped; movement interpolation is Phase-1 polish |
 | **Battle join window** — encounters announce to peers | ✅ hooks in `DoStandardWildBattle` (wild) and `BattleSetup_StartTrainerBattle` (trainer) via setup.sh |
+| **Admin/console commands** — give item/mon, set level/xp, wild battle, trainer reset (PROTOCOL §1.6) | ✅ complete (`net_admin.c`) |
+| **Multiplayer quick start** — new games skip the intro, spawn battle-ready in Littleroot | ✅ complete (`net_admin.c` + new_game.c hook) |
 | **Battle lockstep** — relayed turn inputs into battle controllers, bag scoping | 🚧 Phase 3 (`docs/ROADMAP.md`); messages, session state, seeding, and party injection are already in place |
 
 ## Symbol-drift note

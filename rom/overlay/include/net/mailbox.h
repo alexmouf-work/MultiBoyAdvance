@@ -44,6 +44,18 @@ enum {
     NET_MSG_WARP = 0x85,       // mapGroup u8, mapNum u8, x s16, y s16
     NET_MSG_ASSIGN = 0x86,     // slot u8
     NET_MSG_BATTLE_CMD = 0x90, // sub u8: 1=start{seed u32,count u8,order[4],mode u8} 2=input 3=end{result u8}
+    NET_MSG_ADMIN = 0x91,      // sub u8 (NET_ADMIN_*), payload per sub
+};
+
+// NET_MSG_ADMIN subcommands (console/terminal actions; docs/PROTOCOL.md §1.6)
+enum {
+    NET_ADMIN_GIVE_ITEM = 1,     // item u16, qty u16
+    NET_ADMIN_TAKE_ITEM = 2,     // item u16, qty u16
+    NET_ADMIN_GIVE_MON = 3,      // species u16, level u8
+    NET_ADMIN_SET_LEVEL = 4,     // partySlot u8, level u8
+    NET_ADMIN_GIVE_XP = 5,       // partySlot u8, xp u32
+    NET_ADMIN_WILD_BATTLE = 6,   // species u16, level u8
+    NET_ADMIN_RESET_TRAINER = 7, // trainerId u16 (clears the defeated flag only)
 };
 
 // battle sub-messages

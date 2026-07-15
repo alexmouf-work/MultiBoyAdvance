@@ -113,49 +113,8 @@ function wireGameControls(adapter, socket, ui) {
     document.body.classList.add('touch');
   }
 
-  // Pulse presses: at world speed >1x, even the quickest physical tap spans
-  // dozens of emulated frames — past the games' menu auto-repeat threshold —
-  // so menus cycle several entries per tap. A press therefore delivers a
-  // short fixed burst of emulated frames (~8), and only re-engages as a real
-  // hold if the finger/key is still down after HOLD_MS (so held-walking at
-  // 4x still works; deliberate holds still auto-repeat in menus).
-  const PULSE_EMU_FRAMES = 8;
-  const HOLD_MS = 200;
-  const startPress = (name) => {
-    adapter.buttonDown?.(name);
-    const speed = adapter.currentSpeed ?? 1;
-    if (speed <= 1) return () => adapter.buttonUp?.(name);
-
-    let down = true; // emulated button state
-    let physical = true;
-    const pulseMs = Math.max(16, (PULSE_EMU_FRAMES * 16.7) / speed);
-    const pulse = setTimeout(() => {
-      adapter.buttonUp?.(name);
-      down = false;
-    }, pulseMs);
-    const repress = setTimeout(() => {
-      if (physical) {
-        adapter.buttonDown?.(name);
-        down = true;
-      }
-    }, HOLD_MS);
-    return () => {
-      physical = false;
-      clearTimeout(pulse);
-      clearTimeout(repress);
-      if (down) adapter.buttonUp?.(name);
-    };
-  };
-
-  const activePresses = new Map(); // name -> release fn
-  const pressDown = (name) => {
-    if (activePresses.has(name)) return;
-    activePresses.set(name, startPress(name));
-  };
-  const pressUp = (name) => {
-    activePresses.get(name)?.();
-    activePresses.delete(name);
-  };
+  const pressDown = (name) => adapter.buttonDown?.(name);
+  const pressUp = (name) => adapter.buttonUp?.(name);
 
   for (const pad of document.querySelectorAll('.pad')) {
     const name = pad.dataset.btn;

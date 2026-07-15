@@ -19,9 +19,15 @@ export class UI {
     this.adapter = adapter;
     this.slot = null;
     this.players = new Map(); // slot -> {name, joinedAt (local clock)}
+    this.ghosts = new Map(); // slot -> last ghost pos (proximity checks)
     this.$ = (sel) => document.querySelector(sel);
     this.#wire();
+    this.#wireConsole();
+    this.#wireStarter();
+    this.#wireProximity();
+    this.bridge.onParty = (mons) => this.#onOwnParty(mons);
     setInterval(() => this.#tickDurations(), 1000);
+    setInterval(() => this.#tickProximity(), 500);
   }
 
   #tickDurations() {
@@ -115,11 +121,16 @@ export class UI {
     });
     s.on('leave', (m) => {
       this.players.delete(m.slot);
+      this.ghosts.delete(m.slot);
       this.#renderPlayers();
       this.log('leave', `P${m.slot + 1} left`);
     });
     s.on('ghost', (m) => {
-      if (m.s !== 255) this.log('ghost', `P${m.slot + 1} @ map ${m.g}.${m.n} (${m.x},${m.y})`);
+      if (m.s === 255) this.ghosts.delete(m.slot);
+      else {
+        this.ghosts.set(m.slot, m);
+        this.log('ghost', `P${m.slot + 1} @ map ${m.g}.${m.n} (${m.x},${m.y})`);
+      }
     });
     s.on('flag', (m) => this.log('flag', `world flag 0x${m.id.toString(16)} set`));
     s.on('battle.offer', (m) => this.#showOffer(m));
@@ -133,12 +144,30 @@ export class UI {
     });
     s.on('warp', (m) => this.log('warp', `warped to map ${m.g}.${m.n} (${m.x},${m.y})`));
     s.on('pvp.req', (m) => this.#showPvpChallenge(m));
+    s.on('tp.req', (m) => this.#showTpRequest(m));
+    s.on('trade.recv', (m) => {
+      this.#toast(`🎁 ${m.name} sent you item #${m.item} ×${m.qty}`, { ttl: 8000 });
+      this.log('trade', `${m.name} sent item ${m.item} ×${m.qty}`);
+    });
+    s.on('admin', (m) => this.log('admin', this.#adminText(m)));
     s.on('error', (m) => this.log('error', m.msg));
+  }
+
+  #adminText(m) {
+    switch (m.sub) {
+      case 'give_item': return `received item ${m.item} ×${m.qty}`;
+      case 'take_item': return `item ${m.item} ×${m.qty} taken from bag`;
+      case 'give_mon': return `received Pokémon #${m.species} lv${m.level}`;
+      case 'set_level': return `party slot ${m.slot + 1} set to lv${m.level}`;
+      case 'give_xp': return `party slot ${m.slot + 1} gained ${m.xp} xp`;
+      case 'wild_battle': return `a wild Pokémon #${m.species} lv${m.level} appears!`;
+      case 'reset_trainer': return `trainer ${m.trainer} reset`;
+      default: return `admin: ${m.sub}`;
+    }
   }
 
   #applySpeed(x) {
     this.adapter.setSpeed?.(x);
-    this.adapter.currentSpeed = x; // read by the pulse-press logic
     const btn = document.querySelector('#btn-speed');
     if (btn) btn.textContent = `⚡ ${x}×`;
     for (const b of document.querySelectorAll('#speed-menu button')) {
@@ -146,39 +175,153 @@ export class UI {
     }
   }
 
-  #showOffer(m) {
+  // ---- top-of-screen toasts (inside #gamewrap, so they show in fullscreen) ----
+
+  /**
+   * @param {string} text
+   * @param {{ttl?: number, action?: string, label?: string, onAction?: () => void, sid?: string}} opts
+   */
+  #toast(text, opts = {}) {
     const box = this.$('#offers');
     const div = document.createElement('div');
     div.className = 'offer';
-    div.dataset.sid = m.sid;
-    div.innerHTML = `<span>P${m.from + 1} is battling (opp ${m.opp})</span>`;
-    const join = document.createElement('button');
-    join.textContent = 'Join battle';
-    join.dataset.action = 'join-battle';
-    join.onclick = () => {
-      this.bridge.joinBattle(m.sid);
-      this.log('battle.join', `joined ${m.sid}`);
-      div.remove();
-    };
-    div.append(join);
+    if (opts.sid) div.dataset.sid = opts.sid;
+    const span = document.createElement('span');
+    span.textContent = text;
+    div.append(span);
+    if (opts.onAction) {
+      const btn = document.createElement('button');
+      btn.textContent = opts.label ?? 'OK';
+      if (opts.action) btn.dataset.action = opts.action;
+      btn.onclick = () => {
+        opts.onAction();
+        div.remove();
+      };
+      div.append(btn);
+    }
     box.append(div);
-    setTimeout(() => div.remove(), m.ttl ?? 10_000);
+    setTimeout(() => div.remove(), opts.ttl ?? 10_000);
+    return div;
+  }
+
+  #showOffer(m) {
+    this.#toast(`⚔️ P${m.from + 1} is battling (opp ${m.opp})`, {
+      sid: m.sid,
+      ttl: m.ttl ?? 10_000,
+      action: 'join-battle',
+      label: 'Join battle',
+      onAction: () => {
+        this.bridge.joinBattle(m.sid);
+        this.log('battle.join', `joined ${m.sid}`);
+      },
+    });
   }
 
   #showPvpChallenge(m) {
-    const box = this.$('#offers');
-    const div = document.createElement('div');
-    div.className = 'offer';
-    div.innerHTML = `<span>P${m.from + 1} ${m.name} challenges you!</span>`;
-    const accept = document.createElement('button');
-    accept.textContent = 'Accept';
-    accept.dataset.action = 'pvp-accept';
-    accept.onclick = () => {
-      this.socket.send({ t: 'pvp.accept', from: m.from });
-      div.remove();
+    this.#toast(`⚔️ ${m.name} challenges you to a battle!`, {
+      ttl: 15_000,
+      action: 'pvp-accept',
+      label: 'Accept',
+      onAction: () => this.socket.send({ t: 'pvp.accept', from: m.from }),
+    });
+  }
+
+  #showTpRequest(m) {
+    this.#toast(`📍 ${m.name} wants to teleport to you`, {
+      ttl: 60_000, // matches the server-side request TTL
+      action: 'tp-accept',
+      label: 'Accept',
+      onAction: () => this.socket.send({ t: 'tp.accept', from: m.from }),
+    });
+  }
+
+  // ---- console ----
+
+  #wireConsole() {
+    const input = this.$('#console-in');
+    this.$('#console-form').onsubmit = (e) => {
+      e.preventDefault();
+      const line = input.value.trim();
+      if (!line) return;
+      this.#consolePrint(`> ${line}`, null);
+      this.socket.send({ t: 'cmd', line });
+      input.value = '';
     };
-    div.append(accept);
-    box.append(div);
-    setTimeout(() => div.remove(), 15_000);
+    this.socket.on('cmd.result', (m) => this.#consolePrint(m.msg, m.ok));
+  }
+
+  #consolePrint(text, ok) {
+    const out = this.$('#console-out');
+    const li = document.createElement('li');
+    if (ok !== null) li.dataset.ok = String(ok);
+    li.textContent = text;
+    out.append(li);
+    while (out.children.length > 80) out.firstChild.remove();
+    li.scrollIntoView({ block: 'nearest' });
+  }
+
+  // ---- starter picker (new save: party is empty until a starter is chosen) ----
+
+  #wireStarter() {
+    for (const b of this.$('#starter-modal').querySelectorAll('button')) {
+      b.onclick = () => {
+        this.socket.send({ t: 'starter', species: Number(b.dataset.species) });
+        this.$('#starter-modal').hidden = true;
+        this.log('starter', 'starter chosen — welcome to Hoenn!');
+      };
+    }
+  }
+
+  #onOwnParty(mons) {
+    // The ROM reports the party once online (even when empty); an empty party
+    // means a fresh save that still needs its starter.
+    this.$('#starter-modal').hidden = mons.length !== 0;
+  }
+
+  // ---- ghost proximity: stand next to another player to interact ----
+
+  #wireProximity() {
+    const form = this.$('#prox-give-form');
+    this.$('#btn-prox-battle').onclick = () => {
+      if (this.proxSlot === undefined) return;
+      this.socket.send({ t: 'pvp', to: this.proxSlot });
+      this.log('pvp', `challenge sent to P${this.proxSlot + 1}`);
+    };
+    this.$('#btn-prox-give').onclick = () => {
+      form.hidden = !form.hidden;
+    };
+    form.onsubmit = (e) => {
+      e.preventDefault();
+      const item = Number(this.$('#prox-item').value);
+      const qty = Number(this.$('#prox-qty').value) || 1;
+      if (!item || this.proxSlot === undefined) return;
+      this.socket.send({ t: 'trade.give', to: this.proxSlot, item, qty });
+      this.log('trade', `sent item ${item} ×${qty} to P${this.proxSlot + 1}`);
+      form.hidden = true;
+    };
+  }
+
+  #tickProximity() {
+    const chip = this.$('#proximity');
+    const my = this.bridge.myPos;
+    let found;
+    if (my) {
+      for (const [slot, g] of this.ghosts) {
+        if (slot === this.slot) continue;
+        if (g.g === my.g && g.n === my.n && Math.abs(g.x - my.x) + Math.abs(g.y - my.y) <= 1) {
+          found = slot;
+          break;
+        }
+      }
+    }
+    if (found === this.proxSlot) return;
+    this.proxSlot = found;
+    if (found === undefined) {
+      chip.hidden = true;
+      this.$('#prox-give-form').hidden = true;
+    } else {
+      this.$('#proximity-name').textContent = this.players.get(found)?.name ?? `P${found + 1}`;
+      chip.hidden = false;
+    }
   }
 }

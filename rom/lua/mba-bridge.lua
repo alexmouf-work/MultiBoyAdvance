@@ -141,7 +141,7 @@ local T = {
   PRESENCE = 0x01, FLAG_SET = 0x02, VAR_SET = 0x03, PARTY = 0x05, REQUEST = 0x06,
   PARTY_FULL = 0x07, BATTLE_EVENT = 0x10, HELLO = 0x7F,
   GHOST = 0x81, FLAG_APPLY = 0x82, VAR_APPLY = 0x83, WARP = 0x85, ASSIGN = 0x86,
-  BATTLE_CMD = 0x90,
+  BATTLE_CMD = 0x90, ADMIN = 0x91,
 }
 local MON_WIRE_SIZE = 32
 local MAGIC = "MBA0\1" -- magic + version byte
@@ -395,6 +395,32 @@ handleWire = function(m)
   elseif m.t == "pvp.req" then
     log("PvP challenge from P" .. (m.from + 1) .. " (" .. (m.name or "?") .. ")" .. (AUTOJOIN and " — auto-accepting" or ""))
     if AUTOJOIN then send({ t = "pvp.accept", from = m.from }) end
+  elseif m.t == "tp.req" then
+    log("teleport request from P" .. (m.from + 1) .. " (" .. (m.name or "?") .. ")" .. (AUTOJOIN and " — auto-accepting" or " — set MBA_AUTOJOIN=1 to accept automatically"))
+    if AUTOJOIN then send({ t = "tp.accept", from = m.from }) end
+  elseif m.t == "admin" then
+    -- Console/admin command; field layout mirrors net_admin.c / mailbox.js.
+    local p = nil
+    if m.sub == "give_item" then
+      p = { 1, lo(m.item), hi(m.item), lo(m.qty), hi(m.qty) }
+    elseif m.sub == "take_item" then
+      p = { 2, lo(m.item), hi(m.item), lo(m.qty), hi(m.qty) }
+    elseif m.sub == "give_mon" then
+      p = { 3, lo(m.species), hi(m.species), m.level }
+    elseif m.sub == "set_level" then
+      p = { 4, m.slot, m.level }
+    elseif m.sub == "give_xp" then
+      p = { 5, m.slot, m.xp % 256, math.floor(m.xp / 0x100) % 256, math.floor(m.xp / 0x10000) % 256, math.floor(m.xp / 0x1000000) % 256 }
+    elseif m.sub == "wild_battle" then
+      p = { 6, lo(m.species), hi(m.species), m.level }
+    elseif m.sub == "reset_trainer" then
+      p = { 7, lo(m.trainer), hi(m.trainer) }
+    end
+    if p then queueIn(T.ADMIN, p) end
+  elseif m.t == "trade.recv" then
+    log((m.name or "?") .. " sent you item " .. m.item .. " x" .. m.qty)
+  elseif m.t == "cmd.result" then
+    log("cmd: " .. (m.msg or ""))
   elseif m.t == "error" then
     log("server error: " .. (m.msg or "?"))
   end
