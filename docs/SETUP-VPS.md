@@ -1,11 +1,44 @@
-# Hosting on a VPS (Oracle Cloud Always Free walkthrough)
+# Hosting on a VPS
 
 The server runs 24/7 on a cloud box; your PC's only remaining job is building
-ROMs and pushing them up with one script. These steps are written for Oracle's
-Always Free tier but the scripts are provider-agnostic — any fresh Ubuntu box
-(Hetzner, DigitalOcean, …) works with the same two commands.
+ROMs and pushing them up with one script. The scripts are provider-agnostic —
+any fresh Ubuntu box works with the same two commands:
 
-## 0. Money honesty (Oracle specifics)
+```bash
+# on the box (once):
+curl -fsSL https://raw.githubusercontent.com/alexmouf-work/MultiBoyAdvance/main/deploy/setup-vps.sh | sudo bash -s -- mba.mouftools.com
+```
+```powershell
+# from the PC (every deploy / ROM rebuild):
+powershell -ExecutionPolicy Bypass -File scripts\deploy-mba.ps1 -HostAddr <box-ip>
+```
+
+## Recommended: Hetzner (~€4/month)
+
+Best price/performance in this class, 20 TB monthly traffic included, and a
+static IPv4 comes with the box — no reserved-IP dance, no double firewall.
+
+1. Sign up at console.hetzner.com (card/PayPal; new accounts sometimes get an
+   identity check).
+2. *Create server*: location **Falkenstein** or **Nuremberg** (close to
+   Greece), image **Ubuntu 24.04**, type **CAX11** (2 ARM vCPU / 4 GB,
+   €3.79/mo — our stack is pure JS, ARM is perfect; several friend-scale
+   projects fit alongside). Add your SSH key
+   (`ssh-keygen -t ed25519`, paste `~\.ssh\id_ed25519.pub`).
+   Skip the optional Cloud Firewall, or if you add one: allow inbound TCP
+   22/80/443.
+3. Note the server's IPv4 (static for the life of the server).
+4. Run the two commands above (ssh in as `root` on Hetzner — use
+   `-User root` for the deploy script).
+5. Vercel DNS: point the `mba` **A record** at that IP. Done:
+   https://mba.mouftools.com with automatic real certificates.
+
+Rescaling later (more RAM/CPU for your other projects) is a shutdown-resize-
+boot click in their console.
+
+## Alternative: Oracle Cloud "Always Free" (£0, with caveats)
+
+Kept for reference — the free option if capacity and signup cooperate.
 
 - **There is no hard £0 spend cap on Oracle PAYG.** *Budgets* only send email
   alerts. You stay at £0 by only creating **Always Free shapes** (below stays
