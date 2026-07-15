@@ -149,6 +149,25 @@ test('teleport resolves to target position; pvp handshake starts immediately', (
   world.close();
 });
 
+test('shared speed: clamped, broadcast to everyone, replayed in welcome', () => {
+  const world = new World(makeCfg());
+  const a = join(world, 'A');
+  const b = join(world, 'B');
+
+  world.handle(a.client, { t: 'speed', x: 3 });
+  assert.equal(msgs(a.inbox, 'speed')[0].x, 3); // setter hears it too
+  assert.equal(msgs(b.inbox, 'speed')[0].x, 3);
+
+  world.handle(b.client, { t: 'speed', x: 9 }); // clamped to 4
+  assert.equal(msgs(a.inbox, 'speed')[1].x, 4);
+  world.handle(b.client, { t: 'speed', x: 4 }); // no change -> no re-broadcast
+  assert.equal(msgs(a.inbox, 'speed').length, 2);
+
+  const c = join(world, 'C');
+  assert.equal(msgs(c.inbox, 'welcome')[0].speed, 4); // late joiner catches up
+  world.close();
+});
+
 test('world full rejects a 9th player', () => {
   const world = new World(makeCfg());
   for (let i = 0; i < 8; i++) join(world, `P${i}`);

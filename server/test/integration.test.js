@@ -147,6 +147,33 @@ test('http host serves the web client with cross-origin isolation headers', asyn
   srv.close();
 });
 
+test('/rom/mba.gba serves the host build fresh, 404s when absent', async () => {
+  const cfg = testCfg();
+  const romDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mba-rom-'));
+  cfg.romFile = path.join(romDir, 'mba.gba');
+  fs.writeFileSync(cfg.romFile, Buffer.from([0xde, 0xad, 0xbe, 0xef]));
+
+  const srv = createServers(cfg);
+  await new Promise((r) => srv.httpServer.listen(0, '127.0.0.1', r));
+  const port = srv.httpServer.address().port;
+
+  const head = await fetch(`http://127.0.0.1:${port}/rom/mba.gba`, { method: 'HEAD' });
+  assert.equal(head.status, 200);
+  const res = await fetch(`http://127.0.0.1:${port}/rom/mba.gba`);
+  assert.equal(res.headers.get('cache-control'), 'no-store');
+  assert.deepEqual(new Uint8Array(await res.arrayBuffer()), Uint8Array.from([0xde, 0xad, 0xbe, 0xef]));
+
+  // "update the build on demand": a rebuild is served on the very next fetch
+  fs.writeFileSync(cfg.romFile, Buffer.from([0x01]));
+  const res2 = await fetch(`http://127.0.0.1:${port}/rom/mba.gba`);
+  assert.equal((await res2.arrayBuffer()).byteLength, 1);
+
+  fs.rmSync(cfg.romFile);
+  const gone = await fetch(`http://127.0.0.1:${port}/rom/mba.gba`);
+  assert.equal(gone.status, 404);
+  srv.close();
+});
+
 test('https server (self-signed) serves the client with isolation headers', async () => {
   const srv = createServers(testCfg());
   await srv.listen(); // generates the cert into tlsDir, starts all listeners

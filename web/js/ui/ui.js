@@ -62,6 +62,11 @@ export class UI {
       for (const p of m.players) this.players.set(p.slot, p.name);
       this.#renderPlayers();
       this.log('welcome', `joined as P${m.slot + 1} · ${m.flags.length} world flags known`);
+      if (m.speed > 1) this.#applySpeed(m.speed);
+    });
+    s.on('speed', (m) => {
+      this.#applySpeed(m.x);
+      this.log('speed', `game speed set to ${m.x}× (for everyone)`);
     });
     s.on('join', (m) => {
       if (m.sid) return; // battle-join notices handled in log only
@@ -90,6 +95,13 @@ export class UI {
     s.on('warp', (m) => this.log('warp', `warped to map ${m.g}.${m.n} (${m.x},${m.y})`));
     s.on('pvp.req', (m) => this.#showPvpChallenge(m));
     s.on('error', (m) => this.log('error', m.msg));
+  }
+
+  #applySpeed(x) {
+    this.adapter.setSpeed?.(x);
+    for (const b of document.querySelectorAll('#speed button')) {
+      b.classList.toggle('on', Number(b.dataset.x) === x);
+    }
   }
 
   #showOffer(m) {

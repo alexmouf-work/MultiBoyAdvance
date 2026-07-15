@@ -154,13 +154,14 @@ Every message has `t` (type). Server assigns each connection an integer `slot`
 | `tp` | `to` slot | teleport me to player `to` |
 | `pvp` | `to` slot | challenge player `to` |
 | `pvp.accept` | `from` slot | accept a challenge |
+| `speed` | `x` int 1–4 | set the shared emulator speed — one world, one clock |
 | `ping` | — | keepalive (expect `pong`) |
 
 ### 2.2 Server → bridge
 
 | `t` | Fields | Meaning |
 |---|---|---|
-| `welcome` | `id`, `slot`, `players` [{slot,name}], `flags` [int], `vars` [[id,v]] | join accepted; replay world state |
+| `welcome` | `id`, `slot`, `players` [{slot,name}], `flags` [int], `vars` [[id,v]], `speed` int | join accepted; replay world state |
 | `join` / `leave` | `slot`, `name?` | roster changes |
 | `ghost` | `slot,g,n,x,y,f,s` | another player's presence (only sent to players on the same map; a synthetic `s:255` despawns) |
 | `flag` / `var` | `id`, `v?` | authoritative world-state update |
@@ -170,6 +171,7 @@ Every message has `t` (type). Server assigns each connection an integer `slot`
 | `battle.end` | `sid`, `result`, `warp?` {g,n,x,y} | session over; optional respawn/return warp |
 | `warp` | `g,n,x,y` | teleport instruction (tp/pvp/whiteout) |
 | `pvp.req` | `from` slot, `name` | incoming challenge |
+| `speed` | `x` int 1–4 | authoritative shared speed; every bridge applies it to its emulator |
 | `pong` / `error` | — / `msg` | |
 
 ### 2.3 Authority rules
@@ -187,7 +189,14 @@ Every message has `t` (type). Server assigns each connection an integer `slot`
   `ceil(6 / N)` Pokémon by level (tie-break: earlier party position), then trim
   to 6 by highest level overall.
 
-### 2.4 Timing
+### 2.4 HTTP side-channel
+
+`GET/HEAD /rom/mba.gba` — the host's current local ROM build
+(`rom/build/mba.gba`), served `no-store` so a rebuild is picked up on the next
+join. 404 when the host hasn't built one. The build never enters the git repo;
+it exists only on the host's server.
+
+### 2.5 Timing
 
 - Presence: bridge sends `pos` only on change, throttled to 10/s.
 - Ghost fan-out: immediate on receipt (≤ 8 players; no batching needed).

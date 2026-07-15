@@ -31,6 +31,7 @@ before(async () => {
     host: '127.0.0.1',
     webRoot: path.resolve(here, '../../web'),
     dataFile: null,
+    romFile: ROM, // the packaged-ROM join flow serves this
     maxPlayers: 8,
     protocolVersion: 1,
     battleJoinWindowMs: 3000,
@@ -61,7 +62,10 @@ test('netcode ROM boots in mGBA-WASM and attaches to the world', { skip: !romExi
   assert.equal(await page.evaluate(() => crossOriginIsolated), true);
 
   await page.fill('#name', 'RealRom');
-  await page.setInputFiles('#rom', ROM);
+  // The packaged-ROM flow: the join button enables once /rom/mba.gba is
+  // found on the server, and clicking it fetches + boots the build.
+  await page.waitForSelector('#btn-join:not([disabled])', { timeout: 10_000 });
+  await page.click('#btn-join');
 
   // Emulator up + ROM loaded (adapter logs "loaded mba.gba" to the event log).
   await page.waitForSelector('#log li[data-t="rom"]', { timeout: 30_000 });

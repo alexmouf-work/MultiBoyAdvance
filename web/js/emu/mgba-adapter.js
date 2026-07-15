@@ -52,4 +52,18 @@ export class MgbaAdapter {
   memoryBase() {
     return 0; // mailbox location inside the heap is unknown; scan everything
   }
+
+  // Touch controls (names: A, B, L, R, Start, Select, Up, Down, Left, Right)
+  buttonDown(name) {
+    this.#module?.buttonPress(name);
+  }
+
+  buttonUp(name) {
+    this.#module?.buttonUnpress(name);
+  }
+
+  /** Shared world speed (1-4×). */
+  setSpeed(x) {
+    this.#module?.setFastForwardMultiplier(x);
+  }
 }

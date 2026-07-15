@@ -35,6 +35,8 @@ export class World {
     this.battles = new Map();
     /** @type {Map<string, number>} resume id -> slot (for reconnects) */
     this.resumable = new Map();
+    /** Shared emulator speed multiplier (1-4) — one world, one clock. */
+    this.speed = 1;
   }
 
   // ---- connection lifecycle -------------------------------------------------
@@ -76,6 +78,7 @@ export class World {
         .map((c) => ({ slot: c.slot, name: c.name })),
       flags: [...this.state.flags],
       vars: [...this.state.vars.entries()],
+      speed: this.speed,
     });
     this._broadcast({ t: 'join', slot, name }, client);
     return client;
@@ -110,6 +113,7 @@ export class World {
       case 'tp': return this._onTeleport(client, msg);
       case 'pvp': return this._onPvp(client, msg);
       case 'pvp.accept': return this._onPvpAccept(client, msg);
+      case 'speed': return this._onSpeed(client, msg);
       case 'ping': return client.send({ t: 'pong' });
     }
   }
@@ -252,6 +256,13 @@ export class World {
     this.battles.set(session.sid, session);
     session.join(client);
     session.startNow();
+  }
+
+  _onSpeed(client, msg) {
+    const x = Math.min(4, Math.max(1, Math.round(msg.x)));
+    if (x === this.speed) return;
+    this.speed = x;
+    this._broadcast({ t: 'speed', x }); // everyone, including the setter
   }
 
   // ---- misc -----------------------------------------------------------------------

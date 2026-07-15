@@ -72,8 +72,15 @@ export class DemoAdapter {
 
   // ---- the "game" ----
 
-  #onKey(e) {
+  #move(dx, dy, facing) {
     if (this.battle) return; // locked in battle
+    this.me.x = Math.max(0, Math.min(COLS - 1, this.me.x + dx));
+    this.me.y = Math.max(0, Math.min(ROWS - 1, this.me.y + dy));
+    this.me.f = facing;
+    this._outPresence();
+  }
+
+  #onKey(e) {
     const dirs = {
       ArrowUp: [0, -1, 1], ArrowDown: [0, 1, 2], ArrowLeft: [-1, 0, 3], ArrowRight: [1, 0, 4],
       w: [0, -1, 1], s: [0, 1, 2], a: [-1, 0, 3], d: [1, 0, 4],
@@ -81,10 +88,20 @@ export class DemoAdapter {
     const d = dirs[e.key];
     if (!d) return;
     e.preventDefault();
-    this.me.x = Math.max(0, Math.min(COLS - 1, this.me.x + d[0]));
-    this.me.y = Math.max(0, Math.min(ROWS - 1, this.me.y + d[1]));
-    this.me.f = d[2];
-    this._outPresence();
+    this.#move(d[0], d[1], d[2]);
+  }
+
+  // Touch-control hooks (same interface as the mGBA adapter).
+  buttonDown(name) {
+    const dirs = { Up: [0, -1, 1], Down: [0, 1, 2], Left: [-1, 0, 3], Right: [1, 0, 4] };
+    const d = dirs[name];
+    if (d) this.#move(d[0], d[1], d[2]);
+  }
+
+  buttonUp() {}
+
+  setSpeed(x) {
+    this.events.push({ t: 'speed', x });
   }
 
   /** Demo UI hook: pretend a wild encounter started. */

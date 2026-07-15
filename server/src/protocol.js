@@ -15,6 +15,7 @@ const CLIENT_MESSAGES = {
   tp: ['to'],
   pvp: ['to'],
   'pvp.accept': ['from'],
+  speed: ['x'],
   ping: [],
 };
 

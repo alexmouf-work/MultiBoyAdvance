@@ -38,6 +38,26 @@ export function createServers(cfg = config) {
   const webRoot = path.resolve(cfg.webRoot);
   const requestHandler = (req, res) => {
     const url = new URL(req.url, 'http://x');
+
+    // The host's current ROM build — always the latest, straight from disk.
+    if (url.pathname === '/rom/mba.gba') {
+      fs.readFile(cfg.romFile ?? '', (err, data) => {
+        if (err) {
+          res.writeHead(404).end('no ROM build on the server (run the ROM build first)');
+          return;
+        }
+        res.writeHead(200, {
+          'content-type': 'application/octet-stream',
+          'content-length': data.length,
+          'cross-origin-opener-policy': 'same-origin',
+          'cross-origin-embedder-policy': 'require-corp',
+          'cache-control': 'no-store', // a rebuild must be picked up immediately
+        });
+        res.end(req.method === 'HEAD' ? undefined : data);
+      });
+      return;
+    }
+
     let rel = decodeURIComponent(url.pathname);
     if (rel === '/') rel = '/index.html';
     const file = path.resolve(path.join(webRoot, rel));

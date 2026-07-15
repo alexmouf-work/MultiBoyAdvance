@@ -2,13 +2,14 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
   <title>MultiBoyAdvance</title>
   <link rel="stylesheet" href="/css/app.css" />
 </head>
 <body>
   <header>
-    <h1>MultiBoyAdvance</h1>
+    <span id="brand">MultiBoyAdvance</span>
     <div id="chips">
       <span id="chip-mode" class="chip">not started</span>
       <span id="chip-server" class="chip">server: —</span>
@@ -16,40 +17,91 @@
     </div>
   </header>
 
+  <!-- ============ join screen ============ -->
   <section id="login">
+    <h1 class="hero">MultiBoyAdvance</h1>
+    <p class="tagline">Shared-world Pokémon — everyone in one Hoenn.</p>
     <div class="card">
-      <h2>Join the world</h2>
-      <label>Trainer name <input id="name" maxlength="16" placeholder="Alex" /></label>
-      <div class="row">
-        <label class="file-btn">
-          Load ROM (.gba)
-          <input id="rom" type="file" accept=".gba" hidden />
-        </label>
-        <button id="btn-demo">Demo mode (no ROM)</button>
-      </div>
-      <p class="hint">
-        The ROM must be the MultiBoyAdvance netcode build — see <code>rom/README.md</code>.
-        Demo mode exercises the full multiplayer stack with a simulated overworld.
+      <label for="name">Trainer name</label>
+      <input id="name" maxlength="16" placeholder="Your name" autocomplete="off" />
+      <button id="btn-join" class="primary" disabled>Join the game</button>
+      <p id="rom-status" class="hint">Checking for the game build…</p>
+      <p id="ctx-warning" class="hint warn" hidden>
+        This address can't run the real game — open the
+        <strong>https://</strong> address (port 8443) instead, or
+        http://localhost:8484 on the host machine.
       </p>
+      <div class="alt">
+        <button id="btn-demo" class="ghost">Demo mode (no ROM)</button>
+        <details>
+          <summary>Advanced</summary>
+          <label class="file-btn">Load a ROM file
+            <input id="rom" type="file" accept=".gba" hidden />
+          </label>
+        </details>
+      </div>
     </div>
   </section>
 
+  <!-- ============ game screen ============ -->
   <section id="stage" hidden>
-    <div id="left">
+    <h1 id="title">MultiBoyAdvance</h1>
+
+    <div id="gamewrap">
       <canvas id="screen" width="480" height="320"></canvas>
-      <div id="demo-controls" hidden>
-        <button id="btn-battle">Start wild battle</button>
-        <button id="btn-flag">Set story flag 0x2A1</button>
-        <button id="btn-end-battle" hidden>Win battle</button>
+
+      <!-- touch controls (overlaid in fullscreen, below the screen otherwise) -->
+      <div id="touch">
+        <div id="dpad">
+          <button class="pad up"    data-btn="Up">▲</button>
+          <button class="pad left"  data-btn="Left">◀</button>
+          <button class="pad right" data-btn="Right">▶</button>
+          <button class="pad down"  data-btn="Down">▼</button>
+        </div>
+        <div id="shoulders">
+          <button class="pad l" data-btn="L">L</button>
+          <button class="pad r" data-btn="R">R</button>
+        </div>
+        <div id="actions">
+          <button class="pad b" data-btn="B">B</button>
+          <button class="pad a" data-btn="A">A</button>
+        </div>
+        <div id="menus">
+          <button class="pad small" data-btn="Select">SELECT</button>
+          <button class="pad small" data-btn="Start">START</button>
+        </div>
       </div>
-      <div id="offers"></div>
     </div>
-    <aside id="right">
-      <h3>Players</h3>
-      <ul id="players"></ul>
-      <h3>Events</h3>
-      <ul id="log"></ul>
-    </aside>
+
+    <div id="controls-bar">
+      <button id="btn-fullscreen" title="Fullscreen">⛶ Fullscreen</button>
+      <div id="speed" role="group" aria-label="Game speed (shared by all players)">
+        <span class="label">Speed</span>
+        <button data-x="1" class="on">1×</button>
+        <button data-x="2">2×</button>
+        <button data-x="3">3×</button>
+        <button data-x="4">4×</button>
+      </div>
+    </div>
+
+    <div id="demo-controls" hidden>
+      <button id="btn-battle">Start wild battle</button>
+      <button id="btn-flag">Set story flag 0x2A1</button>
+      <button id="btn-end-battle" hidden>Win battle</button>
+    </div>
+
+    <div id="offers"></div>
+
+    <div id="panels">
+      <div class="panel">
+        <h3>Players</h3>
+        <ul id="players"></ul>
+      </div>
+      <div class="panel">
+        <h3>Events</h3>
+        <ul id="log"></ul>
+      </div>
+    </div>
   </section>
 
   <script type="module" src="/js/main.js"></script>
