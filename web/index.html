@@ -51,28 +51,29 @@
     <div id="gamewrap">
       <canvas id="screen" width="480" height="320"></canvas>
 
-      <!-- touch controls (overlay or below-the-screen mode) -->
+      <!-- touch controls (overlay or below-the-screen mode):
+           movement + L on the left, R + A/B/Start/Select diamond on the right -->
       <div id="touch">
-        <div id="dpad">
-          <button class="pad up"    data-btn="Up">▲</button>
-          <button class="pad left"  data-btn="Left">◀</button>
-          <button class="pad right" data-btn="Right">▶</button>
-          <button class="pad down"  data-btn="Down">▼</button>
+        <div id="left-cluster">
+          <button class="pad shoulder" data-btn="L">L</button>
+          <div id="dpad">
+            <button class="pad up"    data-btn="Up">▲</button>
+            <button class="pad left"  data-btn="Left">◀</button>
+            <button class="pad right" data-btn="Right">▶</button>
+            <button class="pad down"  data-btn="Down">▼</button>
+          </div>
+          <div id="joystick" hidden>
+            <div id="stick-base"><div id="stick-knob"></div></div>
+          </div>
         </div>
-        <div id="joystick" hidden>
-          <div id="stick-base"><div id="stick-knob"></div></div>
-        </div>
-        <div id="shoulders">
-          <button class="pad l" data-btn="L">L</button>
-          <button class="pad r" data-btn="R">R</button>
-        </div>
-        <div id="actions">
-          <button class="pad b" data-btn="B">B</button>
-          <button class="pad a" data-btn="A">A</button>
-        </div>
-        <div id="menus">
-          <button class="pad small" data-btn="Select">SELECT</button>
-          <button class="pad small" data-btn="Start">START</button>
+        <div id="right-cluster">
+          <button class="pad shoulder" data-btn="R">R</button>
+          <div id="diamond">
+            <button class="pad small start"  data-btn="Start">START</button>
+            <button class="pad small select" data-btn="Select">SELECT</button>
+            <button class="pad a" data-btn="A">A</button>
+            <button class="pad b" data-btn="B">B</button>
+          </div>
         </div>
       </div>
     </div>

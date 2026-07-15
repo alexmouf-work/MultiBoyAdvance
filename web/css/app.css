@@ -259,7 +259,7 @@ button.ghost { background: transparent; }
   position: relative;
   width: 100%;
   max-width: 900px;
-  min-height: calc(190px * var(--ps));
+  min-height: calc(240px * var(--ps));
 }
 body.touch #touch { display: block; }
 
@@ -276,7 +276,25 @@ body.touch #touch { display: block; }
 }
 .pad:active, .pad.held { background: var(--accent); border-color: var(--accent); }
 
-#dpad { position: absolute; left: 10px; bottom: 10px; width: calc(168px * var(--ps)); height: calc(168px * var(--ps)); }
+/* left: L above the movement control; right: R above the action diamond */
+#left-cluster, #right-cluster {
+  position: absolute;
+  bottom: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: calc(10px * var(--ps));
+}
+#left-cluster { left: 10px; align-items: flex-start; }
+#right-cluster { right: 10px; align-items: flex-end; }
+.pad.shoulder {
+  position: static;
+  width: calc(58px * var(--ps));
+  height: calc(38px * var(--ps));
+  border-radius: 10px;
+  font-size: calc(14px * var(--ps));
+}
+
+#dpad { position: relative; width: calc(168px * var(--ps)); height: calc(168px * var(--ps)); }
 #dpad .pad { width: calc(56px * var(--ps)); height: calc(56px * var(--ps)); font-size: calc(18px * var(--ps)); }
 #dpad .up    { left: calc(56px * var(--ps)); top: 0; }
 #dpad .down  { left: calc(56px * var(--ps)); bottom: 0; }
@@ -284,7 +302,7 @@ body.touch #touch { display: block; }
 #dpad .right { right: 0; top: calc(56px * var(--ps)); }
 
 /* joystick mode replaces the d-pad in place */
-#joystick { position: absolute; left: 10px; bottom: 10px; }
+#joystick { position: relative; }
 #stick-base {
   position: relative;
   width: calc(150px * var(--ps));
@@ -307,17 +325,14 @@ body.touch #touch { display: block; }
 }
 #stick-base.live #stick-knob { background: var(--accent); }
 
-#actions { position: absolute; right: 12px; bottom: 26px; width: calc(150px * var(--ps)); height: calc(120px * var(--ps)); }
-#actions .pad { width: calc(66px * var(--ps)); height: calc(66px * var(--ps)); font-size: calc(20px * var(--ps)); }
-#actions .a { right: 0; top: 0; }
-#actions .b { left: 0; bottom: 0; }
-
-#shoulders .pad { width: calc(54px * var(--ps)); height: calc(40px * var(--ps)); border-radius: 10px; top: 0; }
-#shoulders .l { position: absolute; left: 12px; }
-#shoulders .r { position: absolute; right: 12px; }
-
-#menus { position: absolute; left: 50%; transform: translateX(-50%); bottom: 0; display: flex; gap: 10px; }
-#menus .pad { position: static; width: auto; height: calc(30px * var(--ps)); padding: 0 calc(14px * var(--ps)); border-radius: 999px; font-size: calc(11px * var(--ps)); }
+/* A/B/Start/Select in a 4-point diamond: START top, SELECT left, A right, B bottom */
+#diamond { position: relative; width: calc(196px * var(--ps)); height: calc(196px * var(--ps)); }
+#diamond .a, #diamond .b { width: calc(64px * var(--ps)); height: calc(64px * var(--ps)); font-size: calc(20px * var(--ps)); }
+#diamond .small { width: calc(52px * var(--ps)); height: calc(52px * var(--ps)); font-size: calc(8.5px * var(--ps)); letter-spacing: 0.02em; }
+#diamond .start  { top: 0; left: 50%; margin-left: calc(-26px * var(--ps)); }
+#diamond .select { left: 0; top: 50%; margin-top: calc(-26px * var(--ps)); }
+#diamond .a { right: 0; top: 50%; margin-top: calc(-32px * var(--ps)); }
+#diamond .b { bottom: 0; left: 50%; margin-left: calc(-32px * var(--ps)); }
 
 #pad-prefs { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 #pad-prefs .pref { display: flex; align-items: center; gap: 6px; }
@@ -326,23 +341,13 @@ body.touch #touch { display: block; }
 
 /* ---- "below" mode: pads live in a strip under the game, never over it ---- */
 #gamewrap.controls-below #touch {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  grid-template-areas: 'dpad shoulders actions' 'dpad menus actions';
-  align-items: center;
-  justify-items: center;
-}
-#gamewrap.controls-below #dpad,
-#gamewrap.controls-below #joystick { position: relative; left: auto; bottom: auto; grid-area: dpad; }
-#gamewrap.controls-below #actions { position: relative; right: auto; bottom: auto; grid-area: actions; }
-#gamewrap.controls-below #shoulders {
-  grid-area: shoulders;
   display: flex;
-  gap: 18px;
-  padding-top: 6px;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding: 6px 4px;
 }
-#gamewrap.controls-below #shoulders .pad { position: static; }
-#gamewrap.controls-below #menus { position: static; transform: none; grid-area: menus; align-self: start; }
+#gamewrap.controls-below #left-cluster,
+#gamewrap.controls-below #right-cluster { position: static; }
 
 /* ============ fullscreen (native or CSS fallback) ============ */
 #gamewrap:fullscreen, #gamewrap.fake-fullscreen {
@@ -369,11 +374,8 @@ body.touch #touch { display: block; }
   pointer-events: auto;
   opacity: 0.65;
 }
-#gamewrap:fullscreen #dpad, #gamewrap.fake-fullscreen #dpad { left: 18px; bottom: 20px; }
-#gamewrap:fullscreen #joystick, #gamewrap.fake-fullscreen #joystick { left: 18px; bottom: 20px; }
-#gamewrap:fullscreen #actions, #gamewrap.fake-fullscreen #actions { right: 20px; bottom: 36px; }
-#gamewrap:fullscreen #shoulders .pad, #gamewrap.fake-fullscreen #shoulders .pad { top: 14px; }
-#gamewrap:fullscreen #menus, #gamewrap.fake-fullscreen #menus { bottom: 12px; }
+#gamewrap:fullscreen #left-cluster, #gamewrap.fake-fullscreen #left-cluster { left: 18px; bottom: 20px; }
+#gamewrap:fullscreen #right-cluster, #gamewrap.fake-fullscreen #right-cluster { right: 20px; bottom: 20px; }
 
 /* fullscreen + "below" mode: the game shrinks to leave a real control strip —
    pads never cover the picture, even in fullscreen */
