@@ -3,6 +3,7 @@
 // overworld frame, using the same primitives field scripts use.
 
 #include "global.h"
+#include "field_screen_effect.h" // DoWarp
 #include "main.h"
 #include "overworld.h"
 #include "net/mailbox.h"
