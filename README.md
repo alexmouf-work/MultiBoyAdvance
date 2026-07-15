@@ -38,7 +38,8 @@ you use.
 | [`server/`](server/) | Authoritative Node server: WebSocket + raw-TCP (JSON lines), presence, flags, battles, static hosting of `web/` |
 | [`web/`](web/) | Browser client: mGBA-WASM embed, per-frame mailbox bridge, UI overlays. Includes a ROM-free **demo mode** for testing |
 | [`rom/`](rom/) | pokeemerald netcode overlay: `net_*.c` modules + mailbox header + integration guide + `setup.sh`. `rom/lua/` is the desktop-mGBA bridge |
-| [`docs/`](docs/) | [Architecture](docs/ARCHITECTURE.md) · [Protocol spec](docs/PROTOCOL.md) · [Roadmap](docs/ROADMAP.md) · [Field research](docs/RESEARCH.md) · [Windows setup](docs/SETUP-WINDOWS.md) |
+| [`docs/`](docs/) | [Architecture](docs/ARCHITECTURE.md) · [Protocol spec](docs/PROTOCOL.md) · [Roadmap](docs/ROADMAP.md) · [Field research](docs/RESEARCH.md) · [Windows setup](docs/SETUP-WINDOWS.md) · [VPS hosting](docs/SETUP-VPS.md) |
+| [`deploy/`](deploy/) | VPS provisioning (`setup-vps.sh`) and deploy (`deploy-mba.sh`; Windows: `scripts/deploy-mba.ps1`) — see [SETUP-VPS](docs/SETUP-VPS.md) |
 | [`scripts/`](scripts/) | Host-machine helper scripts (Windows PowerShell) |
 | [`emulator/`](emulator/) | Vendored VisualBoyAdvance-M source tree (reference / optional desktop runtime). Not required for the multiplayer stack |
 
