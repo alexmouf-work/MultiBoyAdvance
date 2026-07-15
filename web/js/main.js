@@ -99,9 +99,17 @@ async function start(mode, romFile = null) {
   }
 }
 
-// ---- fullscreen / speed / touch ------------------------------------------------
+// ---- fullscreen / speed / touch / prefs ------------------------------------------
+
+const prefs = {
+  get: (k, d) => localStorage.getItem(`mba.${k}`) ?? d,
+  set: (k, v) => localStorage.setItem(`mba.${k}`, v),
+};
 
 function wireGameControls(adapter, socket, ui) {
+  const wrap = $('#gamewrap');
+  const touch = $('#touch');
+
   // Touch pads appear automatically on touch devices, always in fullscreen.
   if (matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window) {
     document.body.classList.add('touch');
@@ -126,7 +134,87 @@ function wireGameControls(adapter, socket, ui) {
     pad.addEventListener('contextmenu', (e) => e.preventDefault());
   }
 
-  const wrap = $('#gamewrap');
+  // ---- joystick mode: angle -> 8-way digital D-pad presses ----
+  const base = $('#stick-base');
+  const knob = $('#stick-knob');
+  let stickHeld = new Set();
+  const stickApply = (next) => {
+    for (const d of stickHeld) if (!next.has(d)) adapter.buttonUp?.(d);
+    for (const d of next) if (!stickHeld.has(d)) adapter.buttonDown?.(d);
+    stickHeld = next;
+  };
+  const stickMove = (e) => {
+    const r = base.getBoundingClientRect();
+    const R = r.width / 2;
+    let dx = e.clientX - (r.left + R);
+    let dy = e.clientY - (r.top + R);
+    const len = Math.hypot(dx, dy) || 1;
+    const clamped = Math.min(len, R * 0.72);
+    knob.style.transform = `translate(${(dx / len) * clamped}px, ${(dy / len) * clamped}px)`;
+    const next = new Set();
+    if (len > R * 0.28) {
+      // 8-way: use per-axis thresholds so diagonals hold two directions
+      if (dx / len > 0.42) next.add('Right');
+      if (dx / len < -0.42) next.add('Left');
+      if (dy / len > 0.42) next.add('Down');
+      if (dy / len < -0.42) next.add('Up');
+    }
+    stickApply(next);
+  };
+  const stickEnd = () => {
+    base.classList.remove('live');
+    knob.style.transform = '';
+    stickApply(new Set());
+  };
+  base.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    base.setPointerCapture(e.pointerId);
+    base.classList.add('live');
+    stickMove(e);
+  });
+  base.addEventListener('pointermove', (e) => {
+    if (base.classList.contains('live')) stickMove(e);
+  });
+  base.addEventListener('pointerup', stickEnd);
+  base.addEventListener('pointercancel', stickEnd);
+
+  // ---- control preferences: size slider, pad placement, stick toggle ----
+  const applyScale = (pct) => touch.style.setProperty('--ps', String(pct / 100));
+  const applyMode = (mode) => {
+    wrap.classList.toggle('controls-below', mode === 'below');
+    $('#btn-pad-mode').textContent = mode === 'below' ? 'Pads: below' : 'Pads: overlay';
+  };
+  const applyStick = (stick) => {
+    $('#joystick').hidden = stick !== 'stick';
+    $('#dpad').hidden = stick === 'stick';
+    $('#btn-stick').textContent = stick === 'stick' ? 'Joystick' : 'D-pad';
+    if (stick !== 'stick') stickEnd();
+  };
+
+  const scale = Number(prefs.get('padScale', '100'));
+  $('#pad-scale').value = scale;
+  applyScale(scale);
+  applyMode(prefs.get('padMode', 'overlay'));
+  applyStick(prefs.get('padStick', 'dpad'));
+
+  $('#pad-scale').addEventListener('input', (e) => {
+    applyScale(Number(e.target.value));
+    prefs.set('padScale', e.target.value);
+  });
+  $('#btn-pad-mode').onclick = () => {
+    const next = wrap.classList.contains('controls-below') ? 'overlay' : 'below';
+    applyMode(next);
+    prefs.set('padMode', next);
+  };
+  $('#btn-stick').onclick = () => {
+    const next = $('#joystick').hidden ? 'stick' : 'dpad';
+    applyStick(next);
+    prefs.set('padStick', next);
+  };
+
+  // ---- fullscreen (+ keyboard mapping while in it) ----
+  const inFullscreen = () =>
+    Boolean(document.fullscreenElement) || wrap.classList.contains('fake-fullscreen');
   $('#btn-fullscreen').onclick = async () => {
     document.body.classList.add('touch'); // controls are wanted in fullscreen
     try {
@@ -139,6 +227,32 @@ function wireGameControls(adapter, socket, ui) {
   document.addEventListener('fullscreenchange', () => {
     if (!document.fullscreenElement) wrap.classList.remove('fake-fullscreen');
   });
+
+  // Fullscreen key map: WASD move, Z=A, X=B, Enter=Select, C=Start.
+  // Capture phase + stopPropagation so the emulator's own bindings don't
+  // double-fire on the same keys.
+  const FS_KEYS = { w: 'Up', a: 'Left', s: 'Down', d: 'Right', z: 'A', x: 'B', Enter: 'Select', c: 'Start' };
+  const fsKey = (down) => (e) => {
+    if (!inFullscreen()) return;
+    const name = FS_KEYS[e.key.length === 1 ? e.key.toLowerCase() : e.key];
+    if (!name) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.repeat) return;
+    if (down) adapter.buttonDown?.(name);
+    else adapter.buttonUp?.(name);
+  };
+  window.addEventListener('keydown', fsKey(true), true);
+  window.addEventListener('keyup', fsKey(false), true);
+
+  // ---- sidebar drawer ----
+  const sidebar = $('#sidebar');
+  const startOpen = prefs.get('sidebar', matchMedia('(min-width: 900px)').matches ? 'open' : 'closed');
+  sidebar.classList.toggle('open', startOpen === 'open');
+  $('#sidebar-tab').onclick = () => {
+    const open = sidebar.classList.toggle('open');
+    prefs.set('sidebar', open ? 'open' : 'closed');
+  };
 
   // Shared speed: request goes to the server; the world's answer (speed msg,
   // also present in welcome) is what actually applies it — for everyone.

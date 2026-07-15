@@ -46,6 +46,8 @@ export class UI {
   }
 
   #renderPlayers() {
+    const tab = this.$('#sidebar-tab');
+    if (tab) tab.textContent = `👥\n${this.players.size}`;
     const ul = this.$('#players');
     ul.innerHTML = '';
     for (const [slot, p] of [...this.players.entries()].sort((a, b) => a[0] - b[0])) {

@@ -51,13 +51,16 @@
     <div id="gamewrap">
       <canvas id="screen" width="480" height="320"></canvas>
 
-      <!-- touch controls (overlaid in fullscreen, below the screen otherwise) -->
+      <!-- touch controls (overlay or below-the-screen mode) -->
       <div id="touch">
         <div id="dpad">
           <button class="pad up"    data-btn="Up">▲</button>
           <button class="pad left"  data-btn="Left">◀</button>
           <button class="pad right" data-btn="Right">▶</button>
           <button class="pad down"  data-btn="Down">▼</button>
+        </div>
+        <div id="joystick" hidden>
+          <div id="stick-base"><div id="stick-knob"></div></div>
         </div>
         <div id="shoulders">
           <button class="pad l" data-btn="L">L</button>
@@ -83,6 +86,14 @@
         <button data-x="3">3×</button>
         <button data-x="4">4×</button>
       </div>
+      <div id="pad-prefs">
+        <label class="pref" title="Scale the on-screen controls">
+          <span class="label">Size</span>
+          <input id="pad-scale" type="range" min="70" max="170" value="100" />
+        </label>
+        <button id="btn-pad-mode" title="Overlay the pads on the game, or keep them below it">Pads: overlay</button>
+        <button id="btn-stick" title="Swap the D-pad for a joystick">D-pad</button>
+      </div>
     </div>
 
     <div id="demo-controls" hidden>
@@ -94,14 +105,18 @@
     <div id="offers"></div>
     </div><!-- /#main -->
 
-    <aside id="sidebar">
-      <div class="panel">
-        <h3>Online</h3>
-        <ul id="players"></ul>
-      </div>
-      <div class="panel">
-        <h3>Events</h3>
-        <ul id="log"></ul>
+    <!-- drawer anchored to the right edge of the screen -->
+    <aside id="sidebar" class="open">
+      <button id="sidebar-tab" title="Players online">👥</button>
+      <div id="sidebar-body">
+        <div class="panel">
+          <h3>Online</h3>
+          <ul id="players"></ul>
+        </div>
+        <div class="panel">
+          <h3>Events</h3>
+          <ul id="log"></ul>
+        </div>
       </div>
     </aside>
   </section>
