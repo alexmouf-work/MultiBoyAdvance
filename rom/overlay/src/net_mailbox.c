@@ -16,6 +16,7 @@ void NetWarpTick(void);
 void NetBattleTick(void);
 void NetAdminTick(void);
 void NetFlagsTick(void);
+void NetSaveTick(void);
 
 static void NetInit(void)
 {
@@ -151,4 +152,5 @@ void NetTick(void)
     NetWarpTick();
     NetAdminTick();
     NetFlagsTick();
+    NetSaveTick();
 }

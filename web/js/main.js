@@ -105,6 +105,49 @@ async function fetchRomFile() {
   return new File([blob], 'mba.gba');
 }
 
+// ---- save persistence (browser IndexedDB + server copy) ----------------------
+
+const saveUrl = (name) => `/api/save/${encodeURIComponent(name)}`;
+
+/** Pull the trainer's server-side save into the emulator FS before boot.
+ *  Server copy wins (it's refreshed every autosave while playing anywhere);
+ *  with no server copy, whatever IndexedDB restored locally stands. */
+async function restoreSave(adapter, name, ui) {
+  try {
+    const res = await fetch(saveUrl(name));
+    if (!res.ok) return;
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    if (!bytes.length) return;
+    await adapter.writeSave(bytes);
+    ui.log('save', `progress for ${name} restored from the server — pick CONTINUE`);
+  } catch {
+    // offline server copy is a nicety; local FS still applies
+  }
+}
+
+/** Push the current .sav to IndexedDB + the server. One flight at a time. */
+function makeSaveSync(adapter, name, ui) {
+  let busy = false;
+  return async () => {
+    if (busy || !adapter.readSave) return;
+    busy = true;
+    try {
+      // Give the core a beat to flush the flash write into its FS.
+      await new Promise((r) => setTimeout(r, 300));
+      const bytes = adapter.readSave();
+      if (bytes?.length) {
+        await adapter.persistFS?.(); // browser copy
+        await fetch(saveUrl(name), { method: 'PUT', body: bytes }); // server copy
+        ui.log('save', 'progress saved (browser + server)');
+      }
+    } catch (err) {
+      ui.log('error', `save sync failed: ${err.message ?? err}`);
+    } finally {
+      busy = false;
+    }
+  };
+}
+
 // ---- game boot ---------------------------------------------------------------
 
 async function start(mode, romFile = null) {
@@ -137,14 +180,19 @@ async function start(mode, romFile = null) {
     ui.setStatus('#chip-mode', 'failed to start', false);
     return;
   }
+  const playerName = $('#name').value.trim() || 'Player';
   if (romFile) {
     try {
+      if (mode !== 'demo') await restoreSave(adapter, playerName, ui);
       await adapter.loadROM(romFile);
       ui.log('rom', `loaded ${romFile.name}`);
     } catch (err) {
       ui.log('error', String(err.message ?? err));
     }
   }
+  // Every successful in-game save (the ~10s autosave or a manual SAVE) gets
+  // mirrored to IndexedDB and the server.
+  bridge.onSaved = makeSaveSync(adapter, playerName, ui);
 
   socket.connect({ name: $('#name').value || undefined });
 

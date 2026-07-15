@@ -3,7 +3,7 @@
 This directory turns [pret/pokeemerald](https://github.com/pret/pokeemerald)
 into the MultiBoyAdvance game. Nothing of Nintendo's is stored here: `setup.sh`
 clones the decompilation at build time (the clone and any built ROM are
-gitignored), copies our **overlay** in, applies seven small **hooks**, and
+gitignored), copies our **overlay** in, applies eight small **hooks**, and
 builds. Personal use only; never distribute the ROM.
 
 ```
@@ -12,7 +12,8 @@ rom/
 ├── overlay/
 │   ├── include/net/    # mailbox.h (protocol-normative), net.h (public hooks)
 │   └── src/            # net_mailbox.c, net_incoming.c, net_overworld.c,
-│                       # net_flags.c, net_warp.c, net_battle.c, net_admin.c
+│                       # net_flags.c, net_warp.c, net_battle.c, net_admin.c,
+│                       # net_save.c
 └── lua/mba-bridge.lua  # desktop-mGBA bridge (same protocol as the browser)
 ```
 
@@ -69,6 +70,10 @@ pokeemerald drifts and an anchor is missing, apply by hand:
    `gFieldCallback = ExecuteTruckSequence;` with `gFieldCallback = NULL;` —
    the truck-interior cutscene must not run on the Oldale spawn map (its
    script drives truck objects that don't exist there).
+8. **`src/save.c`** — add `#include "net/net.h"`; call `NetOnGameSaved();`
+   right after `gSaveAttemptStatus = SAVE_STATUS_OK;` in `TrySavingData` —
+   reports every successful save (manual or the ~10s autosave in
+   `net_save.c`) so bridges can persist the .sav in the browser + server.
 
 Everything else lives in overlay files that compile standalone (pokeemerald's
 Makefile globs `src/*.c`).
@@ -86,6 +91,7 @@ Makefile globs `src/*.c`).
 | **Ghost rendering** — a sprite per remote player in the overworld | ✅ complete (`net_overworld.c`): camera-tracked player sprites (Brendan/May by slot), facing anims, map-scoped spawn/despawn, stale-id invalidation across map loads. Tile-snapped; movement interpolation is Phase-1 polish |
 | **Battle join window** — encounters announce to peers | ✅ hooks in `DoStandardWildBattle` (wild) and `BattleSetup_StartTrainerBattle` (trainer) via setup.sh |
 | **Admin/console commands** — give item/mon, set level/xp, wild battle, trainer reset, set name (PROTOCOL §1.6); queued and applied only on safe overworld frames | ✅ complete (`net_admin.c`) |
+| **Autosave** — flash save every ~10s from quiet overworld frames, deferred when unsafe; every save reported (SAVED) for browser+server persistence | ✅ complete (`net_save.c` + save.c hook) |
 | **Multiplayer quick start** — NEW GAME skips Birch speech + intro entirely, spawns outside the Oldale Pokémon Center with the story machine post-rescue, whiteout point at that Center; world state resynced after init | ✅ complete (`net_admin.c` + new_game.c/main_menu.c/overworld.c hooks) |
 | **Battle lockstep** — relayed turn inputs into battle controllers, bag scoping | 🚧 Phase 3 (`docs/ROADMAP.md`); messages, session state, seeding, and party injection are already in place |
 

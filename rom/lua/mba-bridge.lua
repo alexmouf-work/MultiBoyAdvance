@@ -139,7 +139,7 @@ end
 -- ------------------------------------------------------------- protocol ---
 local T = {
   PRESENCE = 0x01, FLAG_SET = 0x02, VAR_SET = 0x03, PARTY = 0x05, REQUEST = 0x06,
-  PARTY_FULL = 0x07, LOG = 0x0F, BATTLE_EVENT = 0x10, HELLO = 0x7F,
+  PARTY_FULL = 0x07, LOG = 0x0F, BATTLE_EVENT = 0x10, SAVED = 0x11, HELLO = 0x7F,
   GHOST = 0x81, FLAG_APPLY = 0x82, VAR_APPLY = 0x83, WARP = 0x85, ASSIGN = 0x86,
   BATTLE_CMD = 0x90, ADMIN = 0x91,
 }
@@ -296,6 +296,8 @@ local function gameToWire(rec)
     log("game netcode is up (HELLO v" .. (p[1] or 0) .. ")")
   elseif t == T.LOG then
     log("[game] " .. string.char(table.unpack(p)))
+  elseif t == T.SAVED then
+    log("game saved (desktop mGBA writes the .sav to disk itself)")
   elseif t == T.PRESENCE then
     local key = table.concat(p, ",")
     if key ~= lastPosKey and frames - lastPosFrame >= 6 then

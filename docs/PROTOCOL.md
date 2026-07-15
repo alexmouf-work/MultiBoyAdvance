@@ -90,6 +90,7 @@ record self-delimiting). Types `0x01–0x7F` flow game→host, `0x80–0xFF` hos
 | 0x06 | `REQUEST` | sub u8, arg u8: sub 1=teleport-to-slot(arg), 2=pvp-challenge(arg), 3=pvp-accept(arg), 4=resync (arg unused; a fresh save asks the server to replay world flags/vars + identity) |
 | 0x0F | `LOG` | raw ASCII text (≤48 bytes) — the game's debug feed (`NetLog`/`NetLogNum`). Bridges surface it locally (web Debug panel / mGBA console); it is NOT forwarded to the server |
 | 0x10 | `BATTLE_EVENT` | sub u8, then: sub 1=ENCOUNTER_OPEN {kind u8, opponent u16}; sub 2=TURN_INPUT {turn u8, action u8, moveSlot u8, target u8, extra u16}; sub 3=OUTCOME {result u8: 1=win 2=loss 3=flee} |
+| 0x11 | `SAVED` | no payload — the game wrote its flash save (the ~10s autosave in `net_save.c`, or a manual START-menu save). The web bridge reacts by mirroring the .sav to IndexedDB and `PUT /api/save/<name>` |
 | 0x7F | `HELLO` | version u8 — game finished booting netcode |
 
 #### Host → game
@@ -231,6 +232,14 @@ Every message has `t` (type). Server assigns each connection an integer `slot`
 (`rom/build/mba.gba`), served `no-store` so a rebuild is picked up on the next
 join. 404 when the host hasn't built one. The build never enters the git repo;
 it exists only on the host's server.
+
+`GET/PUT /api/save/<name>` — the trainer's game save (.sav flash image,
+≤256 KB). Bridges PUT it after every `SAVED` report; the join flow GETs it and
+stages it in the emulator before boot, so CONTINUE picks up where the last
+autosave left off on any device. Keys are the registry's case-insensitive
+trainer names (filename-safe characters only); files live in
+`server/data/saves/`. The server copy wins over the browser's IndexedDB copy
+at boot.
 
 `GET /api/users` — `{users: [...]}` in the same shape as the `users` wire
 message. The join screen uses it (before any WebSocket exists) to list

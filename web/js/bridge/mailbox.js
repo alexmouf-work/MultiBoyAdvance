@@ -25,6 +25,7 @@ export const T = {
   PARTY_FULL: 0x07,
   LOG: 0x0f,
   BATTLE_EVENT: 0x10,
+  SAVED: 0x11,
   HELLO: 0x7f,
   // Host → game
   GHOST: 0x81,

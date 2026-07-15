@@ -19,6 +19,7 @@ export class Bridge {
   onStatus = () => {};
   onParty = () => {}; // (mons summary) — UI starter picker keys off this
   onLog = () => {}; // (text) — game debug feed + bridge diagnostics
+  onSaved = () => {}; // the game wrote its flash save; persist the .sav
   myPos = null; // our own last reported {g,n,x,y,f,s} (ghost proximity UI)
   lastFrame = null; // {fc, gs} — live heartbeat for the debug panel
   #stallFrames = 0;
@@ -61,10 +62,11 @@ export class Bridge {
 
     // Heartbeat + freeze detector: the emulator emits video frames even when
     // the ARM main loop is stuck inside one, so a frameCounter that stops
-    // moving for ~2s means the GAME is hard-hung — surface it loudly.
+    // moving means the GAME is hung. Threshold ~5s: a legitimate flash save
+    // stalls the ARM for ~2s and must not trip the alarm.
     const fc = this.#box.frameCounter;
     if (this.lastFrame && fc === this.lastFrame.fc) {
-      if (++this.#stallFrames === 120 && !this.#stalled) {
+      if (++this.#stallFrames === 300 && !this.#stalled) {
         this.#stalled = true;
         this.onLog(`GAME STALLED — frame counter stuck at ${fc}, gameState ${this.#box.gameState}`);
         this.#setStatus('stalled');
@@ -121,6 +123,9 @@ export class Bridge {
         break;
       case T.LOG:
         this.onLog(String.fromCharCode(...payload));
+        break;
+      case T.SAVED:
+        this.onSaved();
         break;
       case T.PRESENCE: {
         const p = dec.presence(payload);

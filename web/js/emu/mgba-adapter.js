@@ -66,4 +66,22 @@ export class MgbaAdapter {
   setSpeed(x) {
     this.#module?.setFastForwardMultiplier(x);
   }
+
+  // ---- save persistence ----
+
+  /** Current .sav flash image, or null if none exists yet. */
+  readSave() {
+    return this.#module?.getSave() ?? null;
+  }
+
+  /** Stage a .sav before loadGame so the core boots with it (CONTINUE). */
+  async writeSave(bytes, name = 'mba.sav') {
+    const mod = this.#module;
+    await new Promise((resolve) => mod.uploadSaveOrSaveState(new File([bytes], name), resolve));
+  }
+
+  /** Flush the emulator's file system to IndexedDB (the browser-side copy). */
+  async persistFS() {
+    await this.#module?.FSSync?.();
+  }
 }

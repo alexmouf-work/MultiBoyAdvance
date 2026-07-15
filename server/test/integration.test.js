@@ -169,6 +169,39 @@ test('/api/users lists the trainer registry for the join screen', async () => {
   srv.close();
 });
 
+test('/api/save round-trips per-trainer game saves', async () => {
+  const cfg = testCfg();
+  cfg.savesDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mba-saves-'));
+  const srv = createServers(cfg);
+  await new Promise((r) => srv.httpServer.listen(0, '127.0.0.1', r));
+  const port = srv.httpServer.address().port;
+  const url = (n) => `http://127.0.0.1:${port}/api/save/${encodeURIComponent(n)}`;
+
+  // no save yet
+  assert.equal((await fetch(url('Alex'))).status, 404);
+
+  // upload, then read back — keyed case-insensitively like the registry
+  const save = Uint8Array.from([1, 2, 3, 4, 5]);
+  const put = await fetch(url('Alex'), { method: 'PUT', body: save });
+  assert.equal(put.status, 204);
+  const got = await fetch(url('ALEX'));
+  assert.equal(got.status, 200);
+  assert.deepEqual(new Uint8Array(await got.arrayBuffer()), save);
+
+  // the key is sanitized to filename-safe characters — traversal is inert
+  const evil = await fetch(url('../../etc/passwd'), { method: 'PUT', body: save });
+  assert.equal(evil.status, 204);
+  assert.deepEqual(fs.readdirSync(cfg.savesDir).sort(), ['alex.sav', 'etcpasswd.sav']);
+
+  // empty and oversized bodies are refused
+  assert.equal((await fetch(url('Alex'), { method: 'PUT', body: new Uint8Array(0) })).status, 400);
+  assert.equal(
+    (await fetch(url('Alex'), { method: 'PUT', body: new Uint8Array(300 * 1024) })).status,
+    413,
+  );
+  srv.close();
+});
+
 test('/rom/mba.gba serves the host build fresh, 404s when absent', async () => {
   const cfg = testCfg();
   const romDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mba-rom-'));

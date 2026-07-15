@@ -117,6 +117,16 @@ fi
 applied '// MBA: skip Birch intro' src/main_menu.c && say "  ✅ main_menu.c: skip Birch intro" \
   || die "Birch-skip hook did not apply — add manually (rom/README.md §Hooks)"
 
+# 3i. save.c: report every successful save (manual or the ~10s autosave in
+# net_save.c) so bridges can persist the .sav in the browser + on the server.
+if ! applied 'NetOnGameSaved' src/save.c; then
+  hook src/save.c 'gSaveAttemptStatus = SAVE_STATUS_OK;' "save reporting"
+  sed -i '0,/^#include/s//#include "net\/net.h"\n&/' "$PKE/src/save.c"
+  perl -0pi -e 's/(u8 TrySavingData\(u8 saveType\)\n\{.*?gSaveAttemptStatus = SAVE_STATUS_OK;)/$1\n        NetOnGameSaved();/s' "$PKE/src/save.c"
+fi
+applied 'NetOnGameSaved();' src/save.c && say "  ✅ save.c: save reporting" \
+  || die "save hook did not apply — add manually (rom/README.md §Hooks)"
+
 # 3h. overworld.c: CB2_NewGame must not run the truck cutscene on our spawn
 # map — its script drives truck-interior objects that don't exist there.
 if ! applied 'gFieldCallback = NULL; // MBA quickstart' src/overworld.c; then

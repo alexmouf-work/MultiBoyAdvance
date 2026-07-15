@@ -48,6 +48,63 @@ export function createServers(cfg = config) {
       return;
     }
 
+    // Per-trainer game saves (docs/PROTOCOL.md §2.4): bridges PUT the .sav
+    // after every in-game save; joins GET it back before booting the ROM.
+    if (url.pathname.startsWith('/api/save/')) {
+      // Same key rule as the trainer registry, restricted to filename-safe
+      // characters — the key IS the filename, so nothing else may pass.
+      const key = decodeURIComponent(url.pathname.slice('/api/save/'.length))
+        .toLowerCase().replace(/[^a-z0-9 _-]/g, '').trim();
+      if (!key || !cfg.savesDir) {
+        res.writeHead(key ? 501 : 400).end();
+        return;
+      }
+      const file = path.join(cfg.savesDir, `${key}.sav`);
+      if (req.method === 'GET' || req.method === 'HEAD') {
+        fs.readFile(file, (err, data) => {
+          if (err) return res.writeHead(404).end();
+          res.writeHead(200, {
+            'content-type': 'application/octet-stream',
+            'content-length': data.length,
+            'cache-control': 'no-store',
+          });
+          res.end(req.method === 'HEAD' ? undefined : data);
+        });
+        return;
+      }
+      if (req.method === 'PUT' || req.method === 'POST') {
+        const chunks = [];
+        let size = 0;
+        req.on('data', (c) => {
+          size += c.length;
+          if (size > 256 * 1024) {
+            res.writeHead(413).end();
+            req.destroy();
+            return;
+          }
+          chunks.push(c);
+        });
+        req.on('end', () => {
+          if (res.writableEnded) return;
+          const body = Buffer.concat(chunks);
+          if (!body.length) return res.writeHead(400).end();
+          fs.mkdirSync(cfg.savesDir, { recursive: true });
+          const tmp = `${file}.tmp`;
+          fs.writeFileSync(tmp, body);
+          fs.renameSync(tmp, file); // atomic: a crashed upload never corrupts
+          const u = world.state.users.get(key);
+          if (u) {
+            u.savedAt = Date.now();
+            world.state._scheduleSave();
+          }
+          res.writeHead(204).end();
+        });
+        return;
+      }
+      res.writeHead(405).end();
+      return;
+    }
+
     // The host's current ROM build — always the latest, straight from disk.
     if (url.pathname === '/rom/mba.gba') {
       fs.readFile(cfg.romFile ?? '', (err, data) => {

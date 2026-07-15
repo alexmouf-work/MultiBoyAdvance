@@ -26,6 +26,10 @@ void NetSendFullParty(void);
 // (emit-only; no effect on battle state).
 void NetOnTurnFinalized(void);
 
+// save.c hook — call from TrySavingData's success path. Reports the save so
+// bridges can persist the .sav (browser + server). Autosave: net_save.c.
+void NetOnGameSaved(void);
+
 // new_game.c hook (end of NewGameInitData) — multiplayer quick start: the
 // whole intro is skipped (main_menu.c jumps straight to CB2_NewGame, the
 // truck warp is redirected to Oldale Town outside the Pokémon Center), and

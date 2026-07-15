@@ -11,6 +11,9 @@ export const config = {
   webRoot: process.env.MBA_WEB_ROOT ?? path.resolve(here, '../../web'),
   dataFile: process.env.MBA_DATA_FILE ?? path.resolve(here, '../data/world.json'),
   tlsDir: process.env.MBA_TLS_DIR ?? path.resolve(here, '../data'),
+  // Per-trainer game saves (.sav flash images) uploaded by the bridges every
+  // autosave, downloaded again on join — the server-side half of persistence.
+  savesDir: process.env.MBA_SAVES_DIR ?? path.resolve(here, '../data/saves'),
   // Latest local ROM build, served to players at /rom/mba.gba so nobody
   // handles files by hand. Never committed; never leaves this machine's server.
   romFile: process.env.MBA_ROM_FILE ?? path.resolve(here, '../../rom/build/mba.gba'),
