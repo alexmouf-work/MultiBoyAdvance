@@ -87,7 +87,7 @@ record self-delimiting). Types `0x01–0x7F` flow game→host, `0x80–0xFF` hos
 | 0x03 | `VAR_SET` | varId u16, value u16 |
 | 0x05 | `PARTY_SUMMARY` | count u8, then per mon: species u16, level u8, hpPct u8 — sent on party change; drives roster UI |
 | 0x07 | `PARTY_FULL` | count u8, then count × 32-byte wire mons (§1.5) — sent on party change; the server merges these for co-op battles |
-| 0x06 | `REQUEST` | sub u8, arg u8: sub 1=teleport-to-slot(arg), 2=pvp-challenge(arg), 3=pvp-accept(arg) |
+| 0x06 | `REQUEST` | sub u8, arg u8: sub 1=teleport-to-slot(arg), 2=pvp-challenge(arg), 3=pvp-accept(arg), 4=resync (arg unused; a fresh save asks the server to replay world flags/vars + identity) |
 | 0x10 | `BATTLE_EVENT` | sub u8, then: sub 1=ENCOUNTER_OPEN {kind u8, opponent u16}; sub 2=TURN_INPUT {turn u8, action u8, moveSlot u8, target u8, extra u16}; sub 3=OUTCOME {result u8: 1=win 2=loss 3=flee} |
 | 0x7F | `HELLO` | version u8 — game finished booting netcode |
 
@@ -140,6 +140,7 @@ one TLV. Normative C handler: `NetOnAdminCmd` in `rom/overlay/src/net_admin.c`.
 | 5 | `GIVE_XP` | partySlot u8, xp u32 | add exp (capped at max), recalc stats |
 | 6 | `WILD_BATTLE` | species u16, level u8 | scripted wild battle; only fires from a quiet overworld frame |
 | 7 | `RESET_TRAINER` | trainerId u16 | clear the trainer's defeated flag (rewards stay awarded) |
+| 8 | `SET_NAME` | up to 8 charmap bytes, EOS(0xFF)-padded | write the player's registered name into the save (server encodes ASCII → game charset) |
 
 ---
 
@@ -174,6 +175,7 @@ Every message has `t` (type). Server assigns each connection an integer `slot`
 | `trade.give` | `to` slot, `item` int, `qty` int | hand items to a nearby player (server relays `take_item`/`give_item` admin msgs) |
 | `starter` | `species` int (252/255/258) | new-player kit: chosen starter lv5 + 5 Poké Balls + 3 Potions (once per connection) |
 | `cmd` | `line` string (≤200 chars) | console command (see `/help`); server replies `cmd.result` |
+| `resync` | — | fresh save requests the world flags/vars + identity again (reply: `sync` + `admin set_name`); sent by the ROM right after the multiplayer quick start |
 | `speed` | `x` int 1–4 | set the shared emulator speed — one world, one clock |
 | `ping` | — | keepalive (expect `pong`) |
 
@@ -196,6 +198,7 @@ Every message has `t` (type). Server assigns each connection an integer `slot`
 | `admin` | `sub` string + per-sub fields | apply an admin action to your game; the bridge encodes it as ADMIN TLV §1.6 (`sub` strings: `give_item`, `take_item`, `give_mon`, `set_level`, `give_xp`, `wild_battle`, `reset_trainer`) |
 | `trade.recv` | `from` slot, `name`, `item`, `qty` | someone handed you items (UI notice; the bag change arrives via `admin`) |
 | `cmd.result` | `ok` bool, `msg` string | console command reply |
+| `sync` | `flags` [int], `vars` [[id,v]] | world-state replay outside `welcome` (answers `resync` — new-game init wiped what the welcome applied) |
 | `speed` | `x` int 1–4 | authoritative shared speed; every bridge applies it to its emulator |
 | `pong` / `error` | — / `msg` | |
 

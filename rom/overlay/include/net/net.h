@@ -26,9 +26,12 @@ void NetSendFullParty(void);
 // (emit-only; no effect on battle state).
 void NetOnTurnFinalized(void);
 
-// new_game.c hook (WarpToTruck) — multiplayer quick start: skip the intro,
-// mark the story machine done, grant dex/running shoes, default name/gender.
-// The starter Pokémon arrives via the web picker (NET_ADMIN_GIVE_MON).
+// new_game.c hook (end of NewGameInitData) — multiplayer quick start: the
+// whole intro is skipped (main_menu.c jumps straight to CB2_NewGame, the
+// truck warp is redirected to Oldale Town outside the Pokémon Center), and
+// this marks the story machine post-rescue: dex, running shoes, Route 101
+// scene done. The starter arrives via the web picker (NET_ADMIN_GIVE_MON);
+// the player's registered name via NET_ADMIN_SET_NAME after the resync.
 void NetQuickStart(void);
 
 // Ghost state for other players (net_overworld.c owns rendering in Phase 1).

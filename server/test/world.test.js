@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { World } from '../src/world/world.js';
+import { World, encodePokeName } from '../src/world/world.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -204,7 +204,7 @@ test('console commands route admin messages and reply with cmd.result', () => {
   world.close();
 });
 
-test('trade.give moves items between bags; starter kit is once per connection', () => {
+test('trade.give moves items between bags; starter kit guards double-grants', () => {
   const world = new World(makeCfg());
   const a = join(world, 'A');
   const b = join(world, 'B');
@@ -223,12 +223,47 @@ test('trade.give moves items between bags; starter kit is once per connection', 
   assert.equal(admins[2].sub, 'give_item'); // poké balls
   assert.equal(admins[3].sub, 'give_item'); // potions
 
-  world.handle(b.client, { t: 'starter', species: 252 }); // second ask: ignored
+  world.handle(b.client, { t: 'starter', species: 252 }); // double-click: ignored
   assert.equal(msgs(b.inbox, 'admin').length, 4);
+
+  // a grant that never landed (party still empty) is retryable after cooldown
+  b.client.starterAt = Date.now() - 11_000;
+  world.handle(b.client, { t: 'starter', species: 252 });
+  assert.equal(msgs(b.inbox, 'admin').length, 7, 'empty party after cooldown → regrant');
+
+  // but once a party exists, no more starters, ever
+  b.client.starterAt = Date.now() - 11_000;
+  world.handle(b.client, { t: 'party', mons: [{ sp: 258, lv: 5, hp: 100 }] });
+  world.handle(b.client, { t: 'starter', species: 252 });
+  assert.equal(msgs(b.inbox, 'admin').length, 7);
 
   world.handle(a.client, { t: 'starter', species: 999 }); // not a starter
   assert.equal(msgs(a.inbox, 'error').length, 2);
   world.close();
+});
+
+test('resync replays world state and the registered name', () => {
+  const world = new World(makeCfg());
+  world.state.setFlag(0x321);
+  world.state.setVar(0x4092, 7);
+  const a = join(world, 'Ab 9z');
+
+  world.handle(a.client, { t: 'resync' });
+  const sync = msgs(a.inbox, 'sync')[0];
+  assert.deepEqual(sync.flags, [0x321]);
+  assert.deepEqual(sync.vars, [[0x4092, 7]]);
+
+  const setName = msgs(a.inbox, 'admin').find((m) => m.sub === 'set_name');
+  // 'A'→0xBB, 'b'→0xD6, ' '→0x00, '9'→0xAA, 'z'→0xEE, then EOS padding
+  assert.deepEqual(setName.name, [0xbb, 0xd6, 0x00, 0xaa, 0xee, 0xff, 0xff, 0xff]);
+  world.close();
+});
+
+test('encodePokeName: truncates to 7, drops unmappable chars, EOS-pads', () => {
+  assert.deepEqual(encodePokeName('ABCDEFGH'), [0xbb, 0xbc, 0xbd, 0xbe, 0xbf, 0xc0, 0xc1, 0xff]);
+  assert.equal(encodePokeName('Zoé!7').length, 8);
+  assert.deepEqual(encodePokeName('Zoé!7'), [0xd4, 0xe3, 0xa8, 0xff, 0xff, 0xff, 0xff, 0xff]);
+  assert.deepEqual(encodePokeName(''), [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]);
 });
 
 test('shared speed: clamped, broadcast to everyone, replayed in welcome', () => {

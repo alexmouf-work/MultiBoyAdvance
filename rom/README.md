@@ -3,7 +3,7 @@
 This directory turns [pret/pokeemerald](https://github.com/pret/pokeemerald)
 into the MultiBoyAdvance game. Nothing of Nintendo's is stored here: `setup.sh`
 clones the decompilation at build time (the clone and any built ROM are
-gitignored), copies our **overlay** in, applies five small **hooks**, and
+gitignored), copies our **overlay** in, applies seven small **hooks**, and
 builds. Personal use only; never distribute the ROM.
 
 ```
@@ -52,11 +52,23 @@ pokeemerald drifts and an anchor is missing, apply by hand:
    action/move choices are locked; the hook is emit-only).
 5. **`src/new_game.c`** — add `#include "net/net.h"`; in `WarpToTruck`, replace
    the `SetWarpDestination(MAP_GROUP(MAP_INSIDE_OF_TRUCK), …, -1, -1)` line
-   with `NetQuickStart();` followed by
-   `SetWarpDestination(MAP_GROUP(MAP_LITTLEROOT_TOWN), MAP_NUM(MAP_LITTLEROOT_TOWN), WARP_ID_NONE, 10, 12);`
-   — new games skip the truck intro and spawn in Littleroot with the story
-   machine pre-completed (default name, running shoes, Pokédex); the starter
-   arrives through the web picker (ADMIN `GIVE_MON`).
+   with `SetWarpDestination(MAP_GROUP(MAP_OLDALE_TOWN), MAP_NUM(MAP_OLDALE_TOWN), WARP_ID_NONE, 6, 17);`
+   (the tile outside the Oldale Pokémon Center), and insert `NetQuickStart();`
+   right after `RunScriptImmediately(EventScript_ResetAllMapFlags);` — it must
+   run *after* the map-flag reset or its flags get re-clobbered. New games
+   spawn battle-ready with the story machine in the exact post-Route-101-rescue
+   state; the starter arrives through the web picker (ADMIN `GIVE_MON`) and the
+   registered name via ADMIN `SET_NAME`.
+6. **`src/main_menu.c`** — in `Task_HandleMainMenuAPressed`'s
+   `case ACTION_NEW_GAME:`, replace
+   `gTasks[taskId].func = Task_NewGameBirchSpeech_Init;` with
+   `SetMainCallback2(CB2_NewGame); DestroyTask(taskId);` (mirrors the
+   ACTION_CONTINUE arm) — NEW GAME goes straight into the world, skipping the
+   Birch speech and naming screen entirely.
+7. **`src/overworld.c`** — in `CB2_NewGame`, replace
+   `gFieldCallback = ExecuteTruckSequence;` with `gFieldCallback = NULL;` —
+   the truck-interior cutscene must not run on the Oldale spawn map (its
+   script drives truck objects that don't exist there).
 
 Everything else lives in overlay files that compile standalone (pokeemerald's
 Makefile globs `src/*.c`).
@@ -73,8 +85,8 @@ Makefile globs `src/*.c`).
 | **Full-party transfer & merged-party injection** — 32-byte wire mons (PROTOCOL §1.5) sent on change; server-merged party staged via BATTLE_CMD PARTY, injected into `gPlayerParty` at co-op START (original party backed up), restored at END | ✅ complete (`net_battle.c`) |
 | **Ghost rendering** — a sprite per remote player in the overworld | ✅ complete (`net_overworld.c`): camera-tracked player sprites (Brendan/May by slot), facing anims, map-scoped spawn/despawn, stale-id invalidation across map loads. Tile-snapped; movement interpolation is Phase-1 polish |
 | **Battle join window** — encounters announce to peers | ✅ hooks in `DoStandardWildBattle` (wild) and `BattleSetup_StartTrainerBattle` (trainer) via setup.sh |
-| **Admin/console commands** — give item/mon, set level/xp, wild battle, trainer reset (PROTOCOL §1.6) | ✅ complete (`net_admin.c`) |
-| **Multiplayer quick start** — new games skip the intro, spawn battle-ready in Littleroot | ✅ complete (`net_admin.c` + new_game.c hook) |
+| **Admin/console commands** — give item/mon, set level/xp, wild battle, trainer reset, set name (PROTOCOL §1.6); queued and applied only on safe overworld frames | ✅ complete (`net_admin.c`) |
+| **Multiplayer quick start** — NEW GAME skips Birch speech + intro entirely, spawns outside the Oldale Pokémon Center with the story machine post-rescue, whiteout point at that Center; world state resynced after init | ✅ complete (`net_admin.c` + new_game.c/main_menu.c/overworld.c hooks) |
 | **Battle lockstep** — relayed turn inputs into battle controllers, bag scoping | 🚧 Phase 3 (`docs/ROADMAP.md`); messages, session state, seeding, and party injection are already in place |
 
 ## Symbol-drift note

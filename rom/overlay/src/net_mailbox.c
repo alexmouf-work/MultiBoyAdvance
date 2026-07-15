@@ -14,6 +14,7 @@ void NetOverworldTick(void);
 void NetApplyIncoming(void);
 void NetWarpTick(void);
 void NetBattleTick(void);
+void NetAdminTick(void);
 
 static void NetInit(void)
 {
@@ -101,8 +102,10 @@ void NetTick(void)
     // Consume everything the bridge queued for us since last frame.
     NetApplyIncoming();
 
-    // Producers: presence, party change detection, pending warp application.
+    // Producers: presence, party change detection, pending warp application,
+    // queued admin commands (applied only on safe overworld frames).
     NetOverworldTick();
     NetBattleTick();
     NetWarpTick();
+    NetAdminTick();
 }

@@ -13,6 +13,8 @@
 #include "global.h"
 #include "battle.h"
 #include "battle_anim.h" // GetBattlerSide
+#include "main.h"
+#include "overworld.h"
 #include "pokemon.h"
 #include "random.h"
 #include "net/mailbox.h"
@@ -179,6 +181,11 @@ void NetBattleTick(void)
     u32 i;
 
     if (!NetIsOnline() || sPartyInjected)
+        return;
+    // Only report from the overworld: the party visible at the title screen
+    // or during the intro belongs to a save that may be about to be re-init'd
+    // (an empty pre-new-game party would wrongly summon the starter picker).
+    if (gMain.callback2 != CB2_Overworld)
         return;
     if (sPartyResendDelay)
     {

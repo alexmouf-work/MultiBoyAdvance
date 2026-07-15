@@ -131,6 +131,7 @@ export class Bridge {
         if (r.sub === 1) this.#socket.send({ t: 'tp', to: r.arg });
         else if (r.sub === 2) this.#socket.send({ t: 'pvp', to: r.arg });
         else if (r.sub === 3) this.#socket.send({ t: 'pvp.accept', from: r.arg });
+        else if (r.sub === 4) this.#socket.send({ t: 'resync' }); // fresh save wants world state
         break;
       }
       case T.BATTLE_EVENT: {
@@ -149,11 +150,15 @@ export class Bridge {
 
   #wireHandlers() {
     const s = this.#socket;
-    s.on('welcome', (m) => {
-      this.#queueIn(T.ASSIGN, enc.assign(m.slot));
+    const replayWorldState = (m) => {
       for (const id of m.flags ?? []) this.#queueIn(T.FLAG_APPLY, enc.flagApply(id));
       for (const [id, v] of m.vars ?? []) this.#queueIn(T.VAR_APPLY, enc.varApply(id, v));
+    };
+    s.on('welcome', (m) => {
+      this.#queueIn(T.ASSIGN, enc.assign(m.slot));
+      replayWorldState(m);
     });
+    s.on('sync', replayWorldState); // post-new-game replay (resync request)
     s.on('ghost', (m) => {
       const active = m.s === DESPAWN ? 0 : 1;
       this.#queueIn(T.GHOST, enc.ghost(m.slot, active, m.g, m.n, m.x, m.y, m.f, m.s));

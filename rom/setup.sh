@@ -81,15 +81,50 @@ fi
 applied 'NetOnTurnFinalized();' src/battle_main.c && say "  ✅ battle_main.c: turn-finalized hook" \
   || die "turn hook did not apply — add manually (rom/README.md §Hooks)"
 
-# 3f. new_game.c: multiplayer quick start — new games skip the truck/intro,
-# spawn in Littleroot with the story machine done (starter comes via the web picker)
-if ! applied 'NetQuickStart' src/new_game.c; then
-  hook src/new_game.c 'MAP_INSIDE_OF_TRUCK' "multiplayer quick start"
-  sed -i '0,/^#include/s//#include "net\/net.h"\n&/' "$PKE/src/new_game.c"
-  perl -0pi -e 's/    SetWarpDestination\(MAP_GROUP\(MAP_INSIDE_OF_TRUCK\), MAP_NUM\(MAP_INSIDE_OF_TRUCK\), WARP_ID_NONE, -1, -1\);/    NetQuickStart();\n    SetWarpDestination(MAP_GROUP(MAP_LITTLEROOT_TOWN), MAP_NUM(MAP_LITTLEROOT_TOWN), WARP_ID_NONE, 10, 12);/' "$PKE/src/new_game.c"
+# 3f. new_game.c: multiplayer quick start — new games spawn in Oldale Town
+# outside the Pokémon Center, story machine marked post-rescue. Two pieces:
+# the truck warp is redirected, and NetQuickStart() runs at the END of
+# NewGameInitData (after EventScript_ResetAllMapFlags, which would otherwise
+# re-clobber the flags it sets). Starter comes via the web picker.
+# Migrate the v1 hook (Littleroot spawn, NetQuickStart before the warp):
+if applied 'MAP_LITTLEROOT_TOWN), MAP_NUM(MAP_LITTLEROOT_TOWN), WARP_ID_NONE, 10, 12' src/new_game.c; then
+  perl -0pi -e 's/    NetQuickStart\(\);\n    SetWarpDestination\(MAP_GROUP\(MAP_LITTLEROOT_TOWN\), MAP_NUM\(MAP_LITTLEROOT_TOWN\), WARP_ID_NONE, 10, 12\);/    SetWarpDestination(MAP_GROUP(MAP_OLDALE_TOWN), MAP_NUM(MAP_OLDALE_TOWN), WARP_ID_NONE, 6, 17);/' "$PKE/src/new_game.c"
 fi
-applied 'NetQuickStart();' src/new_game.c && say "  ✅ new_game.c: multiplayer quick start" \
+if ! applied 'MAP_OLDALE_TOWN' src/new_game.c; then
+  hook src/new_game.c 'MAP_INSIDE_OF_TRUCK' "multiplayer quick start (spawn warp)"
+  perl -0pi -e 's/    SetWarpDestination\(MAP_GROUP\(MAP_INSIDE_OF_TRUCK\), MAP_NUM\(MAP_INSIDE_OF_TRUCK\), WARP_ID_NONE, -1, -1\);/    SetWarpDestination(MAP_GROUP(MAP_OLDALE_TOWN), MAP_NUM(MAP_OLDALE_TOWN), WARP_ID_NONE, 6, 17);/' "$PKE/src/new_game.c"
+fi
+if ! applied '#include "net/net.h"' src/new_game.c; then
+  sed -i '0,/^#include/s//#include "net\/net.h"\n&/' "$PKE/src/new_game.c"
+fi
+if ! applied 'NetQuickStart();' src/new_game.c; then
+  hook src/new_game.c 'RunScriptImmediately(EventScript_ResetAllMapFlags);' "multiplayer quick start (init)"
+  perl -0pi -e 's/(    RunScriptImmediately\(EventScript_ResetAllMapFlags\);)/$1\n    NetQuickStart();/' "$PKE/src/new_game.c"
+fi
+applied 'MAP_OLDALE_TOWN), MAP_NUM(MAP_OLDALE_TOWN), WARP_ID_NONE, 6, 17' src/new_game.c \
+  && applied 'NetQuickStart();' src/new_game.c && say "  ✅ new_game.c: multiplayer quick start (Oldale spawn)" \
   || die "quick start hook did not apply — add manually (rom/README.md §Hooks)"
+
+# 3g. main_menu.c: NEW GAME goes straight to the world — no Birch speech, no
+# naming screen (the server sets the registered name via ADMIN SET_NAME).
+# Mirrors the ACTION_CONTINUE arm two cases below. NB: the applied marker must
+# be the comment — a bare SetMainCallback2(CB2_NewGame) already exists in the
+# Birch cleanup task.
+if ! applied '// MBA: skip Birch intro' src/main_menu.c; then
+  hook src/main_menu.c 'gTasks[taskId].func = Task_NewGameBirchSpeech_Init;' "skip Birch intro"
+  perl -0pi -e 's/                gTasks\[taskId\]\.func = Task_NewGameBirchSpeech_Init;\n                break;/                SetMainCallback2(CB2_NewGame); \/\/ MBA: skip Birch intro\n                DestroyTask(taskId);\n                break;/' "$PKE/src/main_menu.c"
+fi
+applied '// MBA: skip Birch intro' src/main_menu.c && say "  ✅ main_menu.c: skip Birch intro" \
+  || die "Birch-skip hook did not apply — add manually (rom/README.md §Hooks)"
+
+# 3h. overworld.c: CB2_NewGame must not run the truck cutscene on our spawn
+# map — its script drives truck-interior objects that don't exist there.
+if ! applied 'gFieldCallback = NULL; // MBA quickstart' src/overworld.c; then
+  hook src/overworld.c 'gFieldCallback = ExecuteTruckSequence;' "no truck cutscene"
+  perl -0pi -e 's/    gFieldCallback = ExecuteTruckSequence;/    gFieldCallback = NULL; \/\/ MBA quickstart: no truck cutscene/' "$PKE/src/overworld.c"
+fi
+applied 'gFieldCallback = NULL; // MBA quickstart' src/overworld.c && say "  ✅ overworld.c: no truck cutscene" \
+  || die "truck-cutscene hook did not apply — add manually (rom/README.md §Hooks)"
 
 # --- 4. build -----------------------------------------------------------------------
 say "building (make modern)…"

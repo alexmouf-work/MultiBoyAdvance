@@ -13,8 +13,28 @@ const TP_REQUEST_TTL_MS = 60_000;
 
 // Hoenn starters + the kit every new player gets alongside one.
 const STARTER_SPECIES = new Set([252, 255, 258]); // Treecko, Torchic, Mudkip
+const STARTER_RETRY_MS = 10_000;
 const ITEM_POKE_BALL = 4;
 const ITEM_POTION = 13;
+
+/**
+ * Encode a trainer name into the GBA game's charmap (A-Z, a-z, 0-9, space),
+ * truncated to 7 chars and EOS(0xFF)-padded to 8 bytes — the exact payload
+ * ADMIN SET_NAME writes into the save. Unmappable characters are dropped.
+ */
+export function encodePokeName(name) {
+  const out = [];
+  for (const ch of String(name)) {
+    const c = ch.codePointAt(0);
+    if (ch === ' ') out.push(0x00);
+    else if (c >= 0x30 && c <= 0x39) out.push(0xa1 + c - 0x30); // 0-9
+    else if (c >= 0x41 && c <= 0x5a) out.push(0xbb + c - 0x41); // A-Z
+    else if (c >= 0x61 && c <= 0x7a) out.push(0xd5 + c - 0x61); // a-z
+    if (out.length === 7) break;
+  }
+  while (out.length < 8) out.push(0xff);
+  return out;
+}
 
 /** One connected player, wrapped over whatever transport delivered it. */
 class Client {
@@ -28,7 +48,7 @@ class Client {
     this.party = []; // latest party summary [{sp,lv,hp}]
     this.fullMons = []; // latest full wire mons [{lv, b:[32 ints]}]
     this.tpRequests = new Map(); // requester slot -> timestamp (awaiting our accept)
-    this.starterGiven = false;
+    this.starterAt = 0; // last starter grant (retryable while the party is empty)
     this.joinedAt = Date.now();
     this.lastSeen = Date.now();
   }
@@ -145,6 +165,7 @@ export class World {
       case 'pvp.accept': return this._onPvpAccept(client, msg);
       case 'trade.give': return this._onTradeGive(client, msg);
       case 'starter': return this._onStarter(client, msg);
+      case 'resync': return this._onResync(client);
       case 'cmd': return this._onCmd(client, msg);
       case 'speed': return this._onSpeed(client, msg);
       case 'ping': return client.send({ t: 'pong' });
@@ -322,16 +343,28 @@ export class World {
     target.send({ t: 'trade.recv', from: client.slot, name: client.name, item, qty });
   }
 
-  // New-player kit: chosen starter at lv5, plus balls and potions. One per
-  // connection; the real guard is the game save (picker only shows when the
-  // party is empty).
+  // New-player kit: chosen starter at lv5 (their only Pokémon), plus balls
+  // and potions. The real gate is the game save (the picker only shows while
+  // the party is empty); the cooldown just stops double-click double-grants.
+  // A retry stays possible while the party is STILL empty, so a grant lost to
+  // bad timing (e.g. applied before the save existed) can't lock the player
+  // out of ever getting a starter.
   _onStarter(client, msg) {
-    if (client.starterGiven) return;
     if (!STARTER_SPECIES.has(msg.species)) return client.send({ t: 'error', msg: 'not a starter' });
-    client.starterGiven = true;
+    const empty = client.party.length === 0;
+    if (client.starterAt && !(empty && Date.now() - client.starterAt > STARTER_RETRY_MS)) return;
+    client.starterAt = Date.now();
     client.send({ t: 'admin', sub: 'give_mon', species: msg.species, level: 5 });
     client.send({ t: 'admin', sub: 'give_item', item: ITEM_POKE_BALL, qty: 5 });
     client.send({ t: 'admin', sub: 'give_item', item: ITEM_POTION, qty: 3 });
+  }
+
+  // A fresh save asks for the world state again: whatever the welcome replay
+  // delivered at the title screen was destroyed by new-game initialization.
+  // Also (re)apply the player's registered name into the save.
+  _onResync(client) {
+    client.send({ t: 'sync', flags: [...this.state.flags], vars: [...this.state.vars.entries()] });
+    client.send({ t: 'admin', sub: 'set_name', name: encodePokeName(client.name) });
   }
 
   _onCmd(client, msg) {

@@ -24,7 +24,7 @@ enum {
     NET_MSG_FLAG_SET = 0x02,      // flagId u16
     NET_MSG_VAR_SET = 0x03,       // varId u16, value u16
     NET_MSG_PARTY_SUMMARY = 0x05, // count u8, {species u16, level u8, hpPct u8} * count
-    NET_MSG_REQUEST = 0x06,       // sub u8 (1=tp 2=pvp 3=pvp-accept), arg u8
+    NET_MSG_REQUEST = 0x06,       // sub u8 (1=tp 2=pvp 3=pvp-accept 4=resync), arg u8
     NET_MSG_PARTY_FULL = 0x07,    // count u8, NET_MON_WIRE_SIZE bytes * count
     NET_MSG_BATTLE_EVENT = 0x10,  // sub u8: 1=encounter{kind u8,opp u16} 2=input 3=outcome{result u8}
     NET_MSG_HELLO = 0x7F,         // version u8
@@ -56,6 +56,15 @@ enum {
     NET_ADMIN_GIVE_XP = 5,       // partySlot u8, xp u32
     NET_ADMIN_WILD_BATTLE = 6,   // species u16, level u8
     NET_ADMIN_RESET_TRAINER = 7, // trainerId u16 (clears the defeated flag only)
+    NET_ADMIN_SET_NAME = 8,      // up to 8 charmap bytes (EOS-padded) — player name
+};
+
+// NET_MSG_REQUEST subcommands (game → host)
+enum {
+    NET_REQ_TELEPORT = 1,   // arg = target slot
+    NET_REQ_PVP = 2,        // arg = target slot
+    NET_REQ_PVP_ACCEPT = 3, // arg = challenger slot
+    NET_REQ_RESYNC = 4,     // arg unused — replay world flags/vars + identity
 };
 
 // battle sub-messages

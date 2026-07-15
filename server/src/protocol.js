@@ -18,6 +18,7 @@ const CLIENT_MESSAGES = {
   'pvp.accept': ['from'],
   'trade.give': ['to', 'item', 'qty'],
   starter: ['species'],
+  resync: [], // fresh save asks for the world flags/vars + identity again
   cmd: [], // line: string — checked in the handler
   speed: ['x'],
   ping: [],

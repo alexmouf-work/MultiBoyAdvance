@@ -184,6 +184,9 @@ export const enc = {
         return Uint8Array.from([5, m.slot, m.xp & 0xff, (m.xp >>> 8) & 0xff, (m.xp >>> 16) & 0xff, (m.xp >>> 24) & 0xff]);
       case 'wild_battle': return Uint8Array.from([6, m.species & 0xff, m.species >> 8, m.level]);
       case 'reset_trainer': return Uint8Array.from([7, m.trainer & 0xff, m.trainer >> 8]);
+      case 'set_name':
+        // name = server-side charmap bytes, already EOS-padded to 8
+        return Uint8Array.from([8, ...(m.name ?? []).slice(0, 8).map((b) => b & 0xff)]);
       default: return null;
     }
   },
@@ -249,6 +252,7 @@ export const dec = {
       case 5: return { sub: 'give_xp', slot: p[1], xp: (p[2] | (p[3] << 8) | (p[4] << 16) | (p[5] << 24)) >>> 0 };
       case 6: return { sub: 'wild_battle', species: readU16(p, 1), level: p[3] };
       case 7: return { sub: 'reset_trainer', trainer: readU16(p, 1) };
+      case 8: return { sub: 'set_name', name: [...p.slice(1)] };
       default: return { sub: 'unknown' };
     }
   },

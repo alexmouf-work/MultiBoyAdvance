@@ -326,7 +326,8 @@ local function gameToWire(rec)
     local sub, arg = p[1], p[2]
     if sub == 1 then send({ t = "tp", to = arg })
     elseif sub == 2 then send({ t = "pvp", to = arg })
-    elseif sub == 3 then send({ t = "pvp.accept", from = arg }) end
+    elseif sub == 3 then send({ t = "pvp.accept", from = arg })
+    elseif sub == 4 then send({ t = "resync" }) end
   elseif t == T.BATTLE_EVENT then
     local sub = p[1]
     if sub == 1 then
@@ -340,17 +341,23 @@ local function gameToWire(rec)
 end
 
 -- ------------------------------------------------------- wire -> TLV ------
+local function queueWorldState(m)
+  for _, id in ipairs(m.flags or {}) do
+    queueIn(T.FLAG_APPLY, { lo(id), hi(id) })
+  end
+  for _, pair in ipairs(m.vars or {}) do
+    queueIn(T.VAR_APPLY, { lo(pair[1]), hi(pair[1]), lo(pair[2]), hi(pair[2]) })
+  end
+end
+
 handleWire = function(m)
   if m.t == "welcome" then
     mySlot = m.slot
     log("joined as P" .. (m.slot + 1) .. " (" .. #(m.flags or {}) .. " world flags)")
     queueIn(T.ASSIGN, { m.slot })
-    for _, id in ipairs(m.flags or {}) do
-      queueIn(T.FLAG_APPLY, { lo(id), hi(id) })
-    end
-    for _, pair in ipairs(m.vars or {}) do
-      queueIn(T.VAR_APPLY, { lo(pair[1]), hi(pair[1]), lo(pair[2]), hi(pair[2]) })
-    end
+    queueWorldState(m)
+  elseif m.t == "sync" then
+    queueWorldState(m) -- post-new-game replay (resync request)
   elseif m.t == "ghost" then
     local active = (m.s == 255) and 0 or 1
     queueIn(T.GHOST, { m.slot, active, m.g, m.n, lo(m.x), hi(m.x % 0x10000), lo(m.y), hi(m.y % 0x10000), m.f, m.s })
@@ -415,6 +422,12 @@ handleWire = function(m)
       p = { 6, lo(m.species), hi(m.species), m.level }
     elseif m.sub == "reset_trainer" then
       p = { 7, lo(m.trainer), hi(m.trainer) }
+    elseif m.sub == "set_name" then
+      p = { 8 }
+      for i, byte in ipairs(m.name or {}) do
+        if i > 8 then break end
+        p[#p + 1] = byte
+      end
     end
     if p then queueIn(T.ADMIN, p) end
   elseif m.t == "trade.recv" then
