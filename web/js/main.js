@@ -254,11 +254,23 @@ function wireGameControls(adapter, socket, ui) {
     prefs.set('sidebar', open ? 'open' : 'closed');
   };
 
-  // Shared speed: request goes to the server; the world's answer (speed msg,
-  // also present in welcome) is what actually applies it — for everyone.
-  for (const b of document.querySelectorAll('#speed button')) {
-    b.onclick = () => socket.send({ t: 'speed', x: Number(b.dataset.x) });
+  // Shared speed: a button that opens the 4-speed selector. The request goes
+  // to the server; the world's answer (speed msg, also present in welcome) is
+  // what actually applies it — for everyone.
+  const speedMenu = $('#speed-menu');
+  $('#btn-speed').onclick = (e) => {
+    e.stopPropagation();
+    speedMenu.hidden = !speedMenu.hidden;
+  };
+  for (const b of speedMenu.querySelectorAll('button')) {
+    b.onclick = () => {
+      socket.send({ t: 'speed', x: Number(b.dataset.x) });
+      speedMenu.hidden = true;
+    };
   }
+  document.addEventListener('pointerdown', (e) => {
+    if (!speedMenu.hidden && !e.target.closest('#speed-ctl')) speedMenu.hidden = true;
+  });
 }
 
 // ---- entry ---------------------------------------------------------------------

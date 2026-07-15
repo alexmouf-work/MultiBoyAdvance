@@ -188,10 +188,25 @@ button.ghost { background: transparent; }
 }
 
 #controls-bar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; justify-content: center; }
-#speed { display: flex; align-items: center; gap: 6px; }
-#speed .label { color: var(--dim); font-size: 13px; margin-right: 2px; }
-#speed button { min-width: 46px; }
-#speed button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+#speed-ctl { position: relative; }
+#speed-menu {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 6px;
+  z-index: 45;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+#speed-menu button { min-width: 64px; border: none; }
+#speed-menu button.on { background: var(--accent); color: #fff; }
 
 #demo-controls { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
 

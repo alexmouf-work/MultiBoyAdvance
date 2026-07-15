@@ -79,14 +79,16 @@
 
     <div id="controls-bar">
       <button id="btn-fullscreen" title="Fullscreen">⛶ Fullscreen</button>
-      <div id="speed" role="group" aria-label="Game speed (shared by all players)">
-        <span class="label">Speed</span>
-        <button data-x="1" class="on">1×</button>
-        <button data-x="2">2×</button>
-        <button data-x="3">3×</button>
-        <button data-x="4">4×</button>
-      </div>
       <div id="pad-prefs">
+        <div id="speed-ctl">
+          <button id="btn-speed" title="Game speed (shared by all players)">⚡ 1×</button>
+          <div id="speed-menu" hidden>
+            <button data-x="1" class="on">1×</button>
+            <button data-x="2">2×</button>
+            <button data-x="3">3×</button>
+            <button data-x="4">4×</button>
+          </div>
+        </div>
         <label class="pref" title="Scale the on-screen controls">
           <span class="label">Size</span>
           <input id="pad-scale" type="range" min="70" max="170" value="100" />

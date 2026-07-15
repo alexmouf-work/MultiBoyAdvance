@@ -138,7 +138,9 @@ export class UI {
 
   #applySpeed(x) {
     this.adapter.setSpeed?.(x);
-    for (const b of document.querySelectorAll('#speed button')) {
+    const btn = document.querySelector('#btn-speed');
+    if (btn) btn.textContent = `⚡ ${x}×`;
+    for (const b of document.querySelectorAll('#speed-menu button')) {
       b.classList.toggle('on', Number(b.dataset.x) === x);
     }
   }
