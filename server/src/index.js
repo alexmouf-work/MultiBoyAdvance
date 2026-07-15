@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { config } from './config.js';
 import { ensureCert } from './tls.js';
+import { loadDnsConfig, startDnsUpdater } from './dns-updater.js';
 import { World } from './world/world.js';
 import { parseMessage } from './protocol.js';
 
@@ -184,9 +185,15 @@ export function createServers(cfg = config) {
       } catch (err) {
         console.warn(`[mba] https disabled (${err.message}); LAN ROM play will not work, localhost still will`);
       }
+      // Opt-in dynamic DNS: keeps <name>.<domain> pointed at this network's
+      // public IP via the Vercel API (config: data/dns.json or env).
+      const dnsCfg = loadDnsConfig(path.dirname(cfg.dataFile ?? cfg.tlsDir));
+      if (dnsCfg) this.stopDns = startDnsUpdater(dnsCfg);
+      else console.log('[mba] dynamic dns: off (no data/dns.json or MBA_VERCEL_TOKEN)');
     },
     close() {
       clearInterval(reaper);
+      this.stopDns?.();
       wss.close();
       httpServer.close();
       httpsServer?.close();

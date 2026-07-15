@@ -75,10 +75,23 @@ full multiplayer stack (useful to verify networking before ROM work).
 With a domain (e.g. `mba.mouftools.com`), players anywhere get a trusted
 certificate and the LAN self-signed warning goes away entirely:
 
-1. **DNS** — in the domain dashboard (Vercel: your domain → DNS records), add
-   an **A record** for the (sub)domain pointing at your **public IP**
-   (whatismyip.com). Home IPs can change on router restarts — if yours does,
-   update the record (or ask us to add a small auto-update script).
+1. **DNS — automatic (recommended).** Create a Vercel API token
+   (vercel.com → avatar → *Account Settings* → *Tokens* → Create, scope: the
+   account that owns the domain), then write `server/data/dns.json`:
+   ```json
+   { "token": "YOUR_TOKEN", "domain": "mouftools.com", "name": "mba" }
+   ```
+   The server now keeps `mba.mouftools.com` pointed at your current public IP:
+   it checks every 5 minutes, creates the record if it doesn't exist, and
+   rewrites it whenever your home IP changes. Test with `npm run dns` in
+   `server/` — it should print `mba.mouftools.com -> <your ip> (created)`.
+   The file lives in the gitignored data dir; the token never leaves your
+   machine.
+
+   *Manual alternative:* Vercel dashboard → **Domains** → `mouftools.com` →
+   **DNS Records** → Add: Type `A`, Name `mba`, Value = your public IP
+   (whatismyip.com), TTL 60. You'll have to re-edit it whenever your home IP
+   changes.
 2. **Router** — forward **TCP 80 and 443** to this PC's LAN address.
 3. **Run** — with the game server already running:
    ```powershell
@@ -90,9 +103,24 @@ certificate and the LAN self-signed warning goes away entirely:
    same URL if the router supports NAT loopback (most do); otherwise they keep
    using `https://<lan-ip>:8443`.
 
-No-domain alternative: [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/)
-(`cloudflared tunnel --url http://localhost:8484`) needs no DNS or port
-forwarding. The raw-TCP Lua port (8485) should stay LAN-only.
+### No port forwarding? Tunnels
+
+If you can't (or don't want to) forward router ports, an outbound tunnel from
+the PC works instead — nothing inbound is ever opened:
+
+- **Cloudflare quick tunnel** — zero setup, great for a session:
+  `winget install Cloudflare.cloudflared`, then
+  `cloudflared tunnel --url http://localhost:8484`. It prints a random
+  `https://….trycloudflare.com` URL with a real certificate (so ROM play
+  works). New URL every start.
+- **Cloudflare named tunnel** — same idea but permanently at your own domain;
+  requires the domain's DNS to be hosted on Cloudflare (free, but you'd move
+  `mouftools.com`'s nameservers off Vercel).
+- **Tailscale** — friends-only private network; every player installs
+  Tailscale and joins your tailnet, no public exposure at all. Its *Funnel*
+  feature can also expose the server publicly on a `*.ts.net` HTTPS URL.
+
+The raw-TCP Lua port (8485) should stay LAN-only in all setups.
 
 ### Why the extra HTTPS everywhere?
 
