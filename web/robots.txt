@@ -1,0 +1,11 @@
+# MultiBoyAdvance — allow search engines to index the landing page,
+# but keep the ROM binary and the JSON API out of the crawl (they are
+# not useful in search results and should not be advertised as downloads).
+User-agent: *
+Allow: /$
+Allow: /index.html
+Disallow: /rom/
+Disallow: /api/
+Disallow: /vendor/
+
+Sitemap: https://mba.mouftools.com/sitemap.xml

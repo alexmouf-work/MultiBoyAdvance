@@ -169,6 +169,30 @@ test('/api/users lists the trainer registry for the join screen', async () => {
   srv.close();
 });
 
+test('robots.txt and sitemap.xml serve for search-engine indexing', async () => {
+  const srv = createServers(testCfg());
+  await new Promise((r) => srv.httpServer.listen(0, '127.0.0.1', r));
+  const port = srv.httpServer.address().port;
+
+  const robots = await fetch(`http://127.0.0.1:${port}/robots.txt`);
+  assert.equal(robots.status, 200);
+  assert.match(robots.headers.get('content-type'), /text\/plain/);
+  const robotsBody = await robots.text();
+  assert.match(robotsBody, /Sitemap: https:\/\/mba\.mouftools\.com\/sitemap\.xml/);
+  assert.match(robotsBody, /Disallow: \/rom\//); // the ROM binary stays out of the crawl
+  assert.match(robotsBody, /Disallow: \/api\//);
+
+  const sitemap = await fetch(`http://127.0.0.1:${port}/sitemap.xml`);
+  assert.equal(sitemap.status, 200);
+  assert.match(sitemap.headers.get('content-type'), /xml/);
+  assert.match(await sitemap.text(), /<loc>https:\/\/mba\.mouftools\.com\/<\/loc>/);
+
+  const home = await (await fetch(`http://127.0.0.1:${port}/index.html`)).text();
+  assert.match(home, /name="description"/);
+  assert.match(home, /rel="canonical" href="https:\/\/mba\.mouftools\.com\/"/);
+  srv.close();
+});
+
 test('/api/rom-info fingerprints the served build', async () => {
   const cfg = testCfg();
   const romDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mba-rominfo-'));

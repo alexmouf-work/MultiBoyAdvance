@@ -129,3 +129,23 @@ cross-origin isolation) in a **secure context**: `https://` anywhere, or
 `http://localhost` on the host itself. Plain `http://<lan-ip>` can run demo
 mode but never the real emulator — that's what the server's self-signed
 :8443 listener (LAN) and this section (internet) are for.
+
+### Search-engine indexing
+
+The site ships `web/robots.txt` (allows the landing page, disallows the ROM
+binary and the JSON API) and `web/sitemap.xml`, and `index.html` carries the
+description / canonical / Open Graph tags crawlers read. That's everything
+served automatically. To actually get listed on Google:
+
+1. The public HTTPS setup above must be live (`https://mba.mouftools.com`) —
+   crawlers can only index the site while your PC + server are running.
+2. Verify ownership in [Google Search Console](https://search.google.com/search-console)
+   (a DNS TXT record in Vercel, or the HTML-tag method), then **submit
+   `https://mba.mouftools.com/sitemap.xml`**. Indexing then happens on
+   Google's schedule (days to weeks).
+
+Note: indexing makes the site publicly discoverable. This project serves a
+copyrighted ROM for personal use — appearing in search results is a
+different exposure level than a private link shared with friends. To pull it
+back out of search later, change `web/robots.txt` to `Disallow: /` and
+remove the sitemap submission.
