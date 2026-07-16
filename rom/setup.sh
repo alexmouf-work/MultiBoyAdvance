@@ -136,9 +136,30 @@ fi
 applied 'gFieldCallback = NULL; // MBA quickstart' src/overworld.c && say "  ✅ overworld.c: no truck cutscene" \
   || die "truck-cutscene hook did not apply — add manually (rom/README.md §Hooks)"
 
-# --- 4. build -----------------------------------------------------------------------
+# --- 4. build hygiene ---------------------------------------------------------------
+# Two ways a stale ROM sneaks out of an incremental build, both seen in the wild:
+#  - WSL2's clock drifts after the Windows host sleeps; make then sees
+#    future-dated files, skips recompiling changed sources, and links a
+#    mixed-version ROM that crashes at boot (garbage tiles, no mailbox).
+#  - overlay/hook changes that make's dependency scan misses.
+# Detect both and force a clean build when needed.
+STAMP_FILE="$PKE/.mba-overlay-stamp"
+STAMP=""
+if command -v sha256sum >/dev/null; then
+  STAMP=$(cat overlay/src/*.c overlay/include/net/*.h setup.sh | sha256sum | cut -d' ' -f1)
+fi
+if find "$PKE/src" "$PKE/include" -newermt 'now +2 minutes' -print -quit 2>/dev/null | grep -q .; then
+  say "clock drift detected (future-dated sources) — normalizing times, rebuilding clean"
+  find "$PKE" -newermt 'now +2 minutes' -exec touch {} + 2>/dev/null || true
+  rm -rf "$PKE/build"
+elif [ -n "$STAMP" ] && [ "$(cat "$STAMP_FILE" 2>/dev/null)" != "$STAMP" ]; then
+  say "overlay/hooks changed since the last build — rebuilding clean (takes a few minutes)"
+  rm -rf "$PKE/build"
+fi
+
 say "building (make modern)…"
 make -C "$PKE" modern -j"$(nproc)"
+[ -n "$STAMP" ] && printf '%s' "$STAMP" > "$STAMP_FILE"
 
 mkdir -p "$OUT"
 cp "$PKE/pokeemerald_modern.gba" "$OUT/mba.gba"

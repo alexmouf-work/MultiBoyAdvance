@@ -45,8 +45,17 @@ if not errorlevel 1 (
 )
 findstr /I /C:"error" /C:"fatal" "%TEMP%\mba-pull.log" >nul
 if not errorlevel 1 (
-    echo [0.5/6] WARNING: git pull FAILED - see the message above. Continuing
-    echo         with the local version, which may be outdated.
+    echo.
+    echo  ############################################################
+    echo  #  GIT PULL FAILED - you are NOT on the latest version.    #
+    echo  #  Building now produces an OUTDATED ROM and website.      #
+    echo  #  Fix the git message above first - usually:              #
+    echo  #      git stash --include-untracked                       #
+    echo  #  then run this script again.                             #
+    echo  ############################################################
+    echo.
+    choice /C YN /M "Continue anyway with the OUTDATED local version"
+    if errorlevel 2 exit /b 1
 ) else (
     echo [0.5/6] Repo is up to date. OK.
 )
