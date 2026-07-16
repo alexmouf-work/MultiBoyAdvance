@@ -21,10 +21,20 @@ Players only need a browser — or desktop mGBA for the Lua path.
    Or use `scripts\start-server.ps1`.
 3. Allow it through the firewall (first run usually prompts; otherwise):
    ```powershell
-   New-NetFirewallRule -DisplayName "MultiBoyAdvance" -Direction Inbound -Protocol TCP -LocalPort 8484,8485 -Action Allow
+   New-NetFirewallRule -DisplayName "MultiBoyAdvance" -Direction Inbound -Protocol TCP -LocalPort 8484,8443,8485 -Action Allow
    ```
-4. Find your LAN address: `ipconfig` → IPv4. Players browse to
-   `http://<that-ip>:8484`.
+   (`setup-windows.bat` opens all three for you.)
+4. **Find your real LAN address — this is the #1 phone-connection gotcha.**
+   The server prints the reachable URLs on startup; use the **192.168.x.x**
+   one on phones. Do **not** use a `172.x` address: on machines with WSL,
+   Docker, or Hyper-V, `ipconfig` lists a virtual `172.x` adapter that only
+   exists inside the PC — it loads on the host but is unreachable from any
+   phone or other device (the classic "works on my computer, not my phone").
+   Phones on the same WiFi open `https://<192.168-ip>:8443` (not `:8484` —
+   the real emulator needs the https/secure-context address) and tap through
+   the one-time certificate warning. Use **Safari** on iOS; Chrome-for-iOS
+   often refuses self-signed certificates. (The VPS setup removes the cert
+   warning entirely — see `docs/SETUP-VPS.md`.)
 
 ## 2. Build the netcode ROM (WSL2)
 

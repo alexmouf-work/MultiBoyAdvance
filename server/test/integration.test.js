@@ -169,6 +169,20 @@ test('/api/users lists the trainer registry for the join screen', async () => {
   srv.close();
 });
 
+test('lanUrls ranks real LAN IPs above virtual adapters', async () => {
+  const { lanUrls } = await import('../src/index.js');
+  const lines = lanUrls(8443);
+  // On any host with a network, the block is emitted with the guidance footer.
+  if (lines.length) {
+    assert.match(lines[0], /LAN players/);
+    assert.match(lines.at(-1), /192\.168/);
+    // any 172.x line must be flagged as a probable virtual adapter
+    for (const l of lines) {
+      if (/https:\/\/172\./.test(l)) assert.match(l, /virtual adapter/);
+    }
+  }
+});
+
 test('robots.txt and sitemap.xml serve for search-engine indexing', async () => {
   const srv = createServers(testCfg());
   await new Promise((r) => srv.httpServer.listen(0, '127.0.0.1', r));

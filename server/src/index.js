@@ -9,6 +9,7 @@
 import http from 'node:http';
 import https from 'node:https';
 import net from 'node:net';
+import os from 'node:os';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -34,6 +35,33 @@ const MIME = {
   '.txt': 'text/plain; charset=utf-8',
   '.xml': 'application/xml; charset=utf-8',
 };
+
+/**
+ * Every non-internal IPv4 the server is reachable at, as ready-to-open URLs.
+ * Home-LAN ranges (192.168/16, 10/8) come first; 172.16/12 is ranked last and
+ * flagged, because that's where WSL2 / Docker / Hyper-V virtual adapters live —
+ * those addresses only exist inside this PC and phones can't reach them.
+ */
+export function lanUrls(httpsPort) {
+  const found = [];
+  for (const [name, addrs] of Object.entries(os.networkInterfaces())) {
+    for (const a of addrs ?? []) {
+      if (a.family !== 'IPv4' || a.internal) continue;
+      found.push({ name, ip: a.address });
+    }
+  }
+  const rank = (ip) => (ip.startsWith('192.168.') ? 0 : ip.startsWith('10.') ? 1 : ip.startsWith('172.') ? 3 : 2);
+  found.sort((a, b) => rank(a.ip) - rank(b.ip));
+  if (!found.length) return [];
+
+  const lines = ['[mba] LAN players (phones/tablets on the same WiFi) open one of:'];
+  for (const { name, ip } of found) {
+    const virt = rank(ip) === 3 ? '  <- probably a virtual adapter (WSL/Docker); skip unless it IS your WiFi IP' : '';
+    lines.push(`[mba]     https://${ip}:${httpsPort}   (${name})${virt}`);
+  }
+  lines.push('[mba] use the 192.168.x.x address on phones; accept the one-time certificate warning (Safari).');
+  return lines;
+}
 
 export function createServers(cfg = config) {
   const world = new World(cfg);
@@ -271,6 +299,9 @@ export function createServers(cfg = config) {
       } catch (err) {
         console.warn(`[mba] https disabled (${err.message}); LAN ROM play will not work, localhost still will`);
       }
+      // Print the actual reachable LAN URLs so phones/tablets never get pointed
+      // at a virtual adapter (WSL/Docker/Hyper-V 172.x) they can't reach.
+      for (const line of lanUrls(cfg.httpsPort)) console.log(line);
       // Opt-in dynamic DNS: keeps <name>.<domain> pointed at this network's
       // public IP via the Vercel API (config: data/dns.json or env).
       const dnsCfg = loadDnsConfig(path.dirname(cfg.dataFile ?? cfg.tlsDir));
