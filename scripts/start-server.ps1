@@ -7,6 +7,21 @@ Set-Location (Join-Path $root 'server')
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
     Write-Error 'Node.js not found. Install the LTS from https://nodejs.org first.'
 }
+
+# Ensure the firewall lets LAN devices in. A missing 8443 rule makes Windows
+# silently DROP inbound packets -> phones "buffer endlessly" while the PC (local
+# traffic, not filtered) works fine. Best-effort: needs admin, so warn if denied.
+try {
+    if (-not (Get-NetFirewallRule -DisplayName 'MultiBoyAdvance' -ErrorAction SilentlyContinue)) {
+        New-NetFirewallRule -DisplayName 'MultiBoyAdvance' -Direction Inbound -Protocol TCP `
+            -LocalPort 8484, 8443, 8485 -Action Allow -Profile Any -ErrorAction Stop | Out-Null
+        Write-Host '[mba] firewall rule created (TCP 8484/8443/8485, all profiles).' -ForegroundColor Green
+    }
+} catch {
+    Write-Warning 'Could not create the firewall rule (run PowerShell as Administrator once, or run setup-windows.bat).'
+    Write-Warning 'Until then, phones on the LAN will hang/buffer. Command to run as admin:'
+    Write-Warning '  New-NetFirewallRule -DisplayName "MultiBoyAdvance" -Direction Inbound -Protocol TCP -LocalPort 8484,8443,8485 -Action Allow -Profile Any'
+}
 if (-not (Test-Path 'node_modules')) {
     Write-Host '[mba] installing server dependencies…'
     npm install --no-audit --no-fund
