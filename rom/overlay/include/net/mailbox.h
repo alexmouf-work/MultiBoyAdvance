@@ -27,6 +27,10 @@ enum {
     NET_MSG_REQUEST = 0x06,       // sub u8 (1=tp 2=pvp 3=pvp-accept 4=resync), arg u8
     NET_MSG_LOG = 0x0F,           // ASCII debug text — bridges surface it locally (not sent to the server)
     NET_MSG_SAVED = 0x11,         // no payload — the game wrote its flash save (auto or manual)
+    NET_MSG_SAVEBLOCKS = 0x12,    // save-block snapshot ready for host-side forging (§1.7):
+                                  // mailboxAddr u32, saveCounter u32, lastWrittenSector u8,
+                                  // then 3 × {ptr u32, size u32} for SaveBlock2, SaveBlock1,
+                                  // PokemonStorage (GBA addresses; blocks freshly synced)
     NET_MSG_PARTY_FULL = 0x07,    // count u8, NET_MON_WIRE_SIZE bytes * count
     NET_MSG_BATTLE_EVENT = 0x10,  // sub u8: 1=encounter{kind u8,opp u16} 2=input 3=outcome{result u8}
     NET_MSG_HELLO = 0x7F,         // version u8

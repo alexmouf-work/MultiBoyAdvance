@@ -26,6 +26,7 @@ export const T = {
   LOG: 0x0f,
   BATTLE_EVENT: 0x10,
   SAVED: 0x11,
+  SAVEBLOCKS: 0x12,
   HELLO: 0x7f,
   // Host → game
   GHOST: 0x81,
@@ -244,6 +245,18 @@ export const dec = {
       }
       default: return { sub: 'unknown' };
     }
+  },
+  // NET_MSG_SAVEBLOCKS: everything needed to forge a .sav host-side (§1.7)
+  saveBlocks: (p) => {
+    const u32 = (i) => (p[i] | (p[i + 1] << 8) | (p[i + 2] << 16) | (p[i + 3] << 24)) >>> 0;
+    return {
+      mailboxAddr: u32(0),
+      counter: u32(4),
+      sector: p[8],
+      sb2: { ptr: u32(9), size: u32(13) },
+      sb1: { ptr: u32(17), size: u32(21) },
+      sto: { ptr: u32(25), size: u32(29) },
+    };
   },
   admin: (p) => {
     switch (p[0]) {

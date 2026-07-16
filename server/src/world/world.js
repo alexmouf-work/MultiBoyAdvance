@@ -3,10 +3,13 @@
 // social messages per docs/PROTOCOL.md.
 
 import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
 import { WorldState } from './state.js';
 import { BattleSession } from '../battle/session.js';
 import { inRanges } from '../protocol.js';
 import { runCommand } from '../commands.js';
+import { forgeSave, FLASH_SIZE, SECTOR_DATA_SIZE } from '../saveforge.js';
 
 const DESPAWN_STATE = 255;
 const TP_REQUEST_TTL_MS = 60_000;
@@ -178,6 +181,7 @@ export class World {
       case 'trade.give': return this._onTradeGive(client, msg);
       case 'starter': return this._onStarter(client, msg);
       case 'resync': return this._onResync(client);
+      case 'save.blocks': return this._onSaveBlocks(client, msg);
       case 'cmd': return this._onCmd(client, msg);
       case 'speed': return this._onSpeed(client, msg);
       case 'ping': return client.send({ t: 'pong' });
@@ -369,6 +373,48 @@ export class World {
     client.send({ t: 'admin', sub: 'give_mon', species: msg.species, level: 5 });
     client.send({ t: 'admin', sub: 'give_item', item: ITEM_POKE_BALL, qty: 5 });
     client.send({ t: 'admin', sub: 'give_item', item: ITEM_POTION, qty: 3 });
+  }
+
+  // Freeze-free autosave: the bridge ships raw save-block snapshots every
+  // ~10s; we forge a byte-exact .sav (saveforge.js) onto the trainer's last
+  // stored image and persist it — the game never runs its 2s flash ceremony.
+  _onSaveBlocks(client, msg) {
+    if (!this.cfg.savesDir) return;
+    const now = Date.now();
+    if (client.lastForgeAt && now - client.lastForgeAt < 3000) return; // rate limit
+    let blocks;
+    try {
+      blocks = {
+        sb2: new Uint8Array(Buffer.from(String(msg.sb2), 'base64')),
+        sb1: new Uint8Array(Buffer.from(String(msg.sb1), 'base64')),
+        sto: new Uint8Array(Buffer.from(String(msg.sto), 'base64')),
+      };
+      if (blocks.sb2.length > SECTOR_DATA_SIZE || blocks.sb1.length > 4 * SECTOR_DATA_SIZE
+        || blocks.sto.length > 9 * SECTOR_DATA_SIZE) throw new Error('block too large');
+
+      const key = client.name.toLowerCase().replace(/[^a-z0-9 _-]/g, '').trim();
+      if (!key) return;
+      const file = path.join(this.cfg.savesDir, `${key}.sav`);
+      let base = null;
+      try {
+        const prev = fs.readFileSync(file);
+        if (prev.length === FLASH_SIZE) base = new Uint8Array(prev);
+      } catch { /* first save for this trainer */ }
+
+      const image = forgeSave(blocks, msg.counter >>> 0, msg.sector & 0xff, base);
+      fs.mkdirSync(this.cfg.savesDir, { recursive: true });
+      const tmp = `${file}.tmp`;
+      fs.writeFileSync(tmp, image);
+      fs.renameSync(tmp, file);
+      client.lastForgeAt = now;
+      const u = this.state.users.get(key);
+      if (u) {
+        u.savedAt = now;
+        this.state._scheduleSave();
+      }
+    } catch (err) {
+      client.send({ t: 'error', msg: `save sync rejected: ${err.message}` });
+    }
   }
 
   // A fresh save asks for the world state again: whatever the welcome replay

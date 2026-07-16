@@ -19,6 +19,7 @@ const CLIENT_MESSAGES = {
   'trade.give': ['to', 'item', 'qty'],
   starter: ['species'],
   resync: [], // fresh save asks for the world flags/vars + identity again
+  'save.blocks': ['counter', 'sector'], // sb2/sb1/sto: base64 strings — checked in the handler
   cmd: [], // line: string — checked in the handler
   speed: ['x'],
   ping: [],

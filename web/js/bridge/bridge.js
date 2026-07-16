@@ -127,6 +127,9 @@ export class Bridge {
       case T.SAVED:
         this.onSaved();
         break;
+      case T.SAVEBLOCKS:
+        this.#shipSaveBlocks(dec.saveBlocks(payload));
+        break;
       case T.PRESENCE: {
         const p = dec.presence(payload);
         this.myPos = p;
@@ -222,4 +225,46 @@ export class Bridge {
     this.#sid = sid;
     this.#socket.send({ t: 'battle.join', sid });
   }
+
+  // ---- freeze-free save sync ----
+  // The game published fresh save-block locations (SAVEBLOCKS). We run
+  // between frames, so this memory snapshot is consistent by construction.
+  // The server forges the actual .sav (server/src/saveforge.js).
+
+  #shipSaveBlocks(info) {
+    const mem = this.#adapter.memory();
+    // GBA → heap: EWRAM is contiguous in the emulator heap, and we know one
+    // fixed point in both spaces — the mailbox itself.
+    const heapOf = (gbaPtr) => this.#box.base + (gbaPtr - info.mailboxAddr);
+    const grab = ({ ptr, size }) => {
+      const at = heapOf(ptr);
+      if (size === 0 || size > 0x9000 || at < 0 || at + size > mem.length) return null;
+      return mem.slice(at, at + size);
+    };
+    const sb2 = grab(info.sb2);
+    const sb1 = grab(info.sb1);
+    const sto = grab(info.sto);
+    if (!sb2 || !sb1 || !sto) {
+      this.onLog('save sync skipped: block out of range');
+      return;
+    }
+    this.#socket.send({
+      t: 'save.blocks',
+      counter: info.counter,
+      sector: info.sector,
+      sb2: b64(sb2),
+      sb1: b64(sb1),
+      sto: b64(sto),
+    });
+    this.onLog(`save sync → server (counter ${info.counter})`);
+  }
+}
+
+/** Uint8Array → base64 (chunked; String.fromCharCode has an argument cap). */
+function b64(bytes) {
+  let s = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(s);
 }

@@ -139,7 +139,7 @@ end
 -- ------------------------------------------------------------- protocol ---
 local T = {
   PRESENCE = 0x01, FLAG_SET = 0x02, VAR_SET = 0x03, PARTY = 0x05, REQUEST = 0x06,
-  PARTY_FULL = 0x07, LOG = 0x0F, BATTLE_EVENT = 0x10, SAVED = 0x11, HELLO = 0x7F,
+  PARTY_FULL = 0x07, LOG = 0x0F, BATTLE_EVENT = 0x10, SAVED = 0x11, SAVEBLOCKS = 0x12, HELLO = 0x7F,
   GHOST = 0x81, FLAG_APPLY = 0x82, VAR_APPLY = 0x83, WARP = 0x85, ASSIGN = 0x86,
   BATTLE_CMD = 0x90, ADMIN = 0x91,
 }
@@ -158,6 +158,23 @@ local s16 = function(b, i)
 end
 local lo = function(v) return v % 256 end
 local hi = function(v) return math.floor(v / 256) % 256 end
+
+local B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+local function base64(s)
+  local out = {}
+  for i = 1, #s, 3 do
+    local a, b, c = s:byte(i, i + 2)
+    local n = a * 65536 + (b or 0) * 256 + (c or 0)
+    local i1 = math.floor(n / 262144) % 64
+    local i2 = math.floor(n / 4096) % 64
+    local i3 = math.floor(n / 64) % 64
+    local i4 = n % 64
+    out[#out + 1] = B64:sub(i1 + 1, i1 + 1) .. B64:sub(i2 + 1, i2 + 1)
+      .. (b and B64:sub(i3 + 1, i3 + 1) or "=")
+      .. (c and B64:sub(i4 + 1, i4 + 1) or "=")
+  end
+  return table.concat(out)
+end
 
 -- ---------------------------------------------------------------- state ---
 local sock = nil
@@ -298,6 +315,23 @@ local function gameToWire(rec)
     log("[game] " .. string.char(table.unpack(p)))
   elseif t == T.SAVED then
     log("game saved (desktop mGBA writes the .sav to disk itself)")
+  elseif t == T.SAVEBLOCKS then
+    -- Freeze-free save sync: read the freshly-synced save blocks and let the
+    -- server forge the .sav (works for desktop players too — no HTTP needed).
+    local u32 = function(i) return p[i + 1] + p[i + 2] * 256 + p[i + 3] * 65536 + p[i + 4] * 16777216 end
+    local EWRAM_BASE = 0x02000000
+    local grab = function(ptr, size)
+      local off = ptr - EWRAM_BASE
+      if size == 0 or size > 0x9000 or off < 0 or off + size > EWRAM_LEN then return nil end
+      return wram():readRange(off, size)
+    end
+    local sb2 = grab(u32(9), u32(13))
+    local sb1 = grab(u32(17), u32(21))
+    local sto = grab(u32(25), u32(29))
+    if sb2 and sb1 and sto then
+      send({ t = "save.blocks", counter = u32(4), sector = p[9],
+             sb2 = base64(sb2), sb1 = base64(sb1), sto = base64(sto) })
+    end
   elseif t == T.PRESENCE then
     local key = table.concat(p, ",")
     if key ~= lastPosKey and frames - lastPosFrame >= 6 then

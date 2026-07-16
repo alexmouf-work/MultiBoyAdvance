@@ -264,6 +264,43 @@ test('/delete removes offline trainers only', () => {
   world.close();
 });
 
+test('save.blocks forges a valid .sav into the trainer save store', async () => {
+  const { default: fs } = await import('node:fs');
+  const { default: os } = await import('node:os');
+  const { default: path } = await import('node:path');
+  const { readSector, FLASH_SIZE } = await import('../src/saveforge.js');
+
+  const savesDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mba-forge-'));
+  const world = new World(makeCfg({ savesDir }));
+  const a = join(world, 'Alex');
+
+  const b64 = (u8) => Buffer.from(u8).toString('base64');
+  const blocks = {
+    sb2: b64(Uint8Array.from({ length: 3884 }, (_, i) => i & 0xff)),
+    sb1: b64(new Uint8Array(15752).fill(2)),
+    sto: b64(new Uint8Array(33744).fill(3)),
+  };
+  world.handle(a.client, { t: 'save.blocks', counter: 4, sector: 2, ...blocks });
+
+  const file = path.join(savesDir, 'alex.sav');
+  const image = new Uint8Array(fs.readFileSync(file));
+  assert.equal(image.length, FLASH_SIZE);
+  // counter 4 -> new counter 5 -> slot 2; rotation offset 3 puts id 0 at phys 14+3
+  const s = readSector(image, 14 + 3);
+  assert.equal(s.id, 0);
+  assert.equal(s.counter, 5);
+  assert.equal(s.data[100], 100);
+
+  // rate limit: an immediate second snapshot is dropped silently
+  world.handle(a.client, { t: 'save.blocks', counter: 4, sector: 2, ...blocks });
+
+  // malformed input answers with an error, writes nothing new
+  a.client.lastForgeAt = 0;
+  world.handle(a.client, { t: 'save.blocks', counter: 4, sector: 2, sb2: 'x', sb1: 'x', sto: 'x' });
+  assert.match(msgs(a.inbox, 'error').at(-1).msg, /save sync rejected/);
+  world.close();
+});
+
 test('resync replays world state and the registered name', () => {
   const world = new World(makeCfg());
   world.state.setFlag(0x321);

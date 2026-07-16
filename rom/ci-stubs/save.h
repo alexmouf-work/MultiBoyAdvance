@@ -3,3 +3,5 @@
 #include "global.h"
 #define SAVE_NORMAL 0
 u8 TrySavingData(u8 saveType);
+extern u16 gLastWrittenSector;
+extern u32 gSaveCounter;

@@ -91,7 +91,7 @@ Makefile globs `src/*.c`).
 | **Ghost rendering** — a sprite per remote player in the overworld | ✅ complete (`net_overworld.c`): camera-tracked player sprites (Brendan/May by slot), facing anims, map-scoped spawn/despawn, stale-id invalidation across map loads. Tile-snapped; movement interpolation is Phase-1 polish |
 | **Battle join window** — encounters announce to peers | ✅ hooks in `DoStandardWildBattle` (wild) and `BattleSetup_StartTrainerBattle` (trainer) via setup.sh |
 | **Admin/console commands** — give item/mon, set level/xp, wild battle, trainer reset, set name (PROTOCOL §1.6); queued and applied only on safe overworld frames | ✅ complete (`net_admin.c`) |
-| **Autosave** — flash save every ~10s from quiet overworld frames, deferred when unsafe; every save reported (SAVED) for browser+server persistence | ✅ complete (`net_save.c` + save.c hook) |
+| **Autosave** — freeze-free: save-block snapshots every ~10s (SAVEBLOCKS) forged into a byte-exact .sav server-side (PROTOCOL §1.7); real flash saves only for first-join baseline, map changes, and manual saves, each reported (SAVED) | ✅ complete (`net_save.c` + save.c hook) |
 | **Multiplayer quick start** — NEW GAME skips Birch speech + intro entirely, spawns outside the Oldale Pokémon Center with the story machine post-rescue, whiteout point at that Center; world state resynced after init | ✅ complete (`net_admin.c` + new_game.c/main_menu.c/overworld.c hooks) |
 | **Battle lockstep** — relayed turn inputs into battle controllers, bag scoping | 🚧 Phase 3 (`docs/ROADMAP.md`); messages, session state, seeding, and party injection are already in place |
 

@@ -90,7 +90,8 @@ record self-delimiting). Types `0x01–0x7F` flow game→host, `0x80–0xFF` hos
 | 0x06 | `REQUEST` | sub u8, arg u8: sub 1=teleport-to-slot(arg), 2=pvp-challenge(arg), 3=pvp-accept(arg), 4=resync (arg unused; a fresh save asks the server to replay world flags/vars + identity) |
 | 0x0F | `LOG` | raw ASCII text (≤48 bytes) — the game's debug feed (`NetLog`/`NetLogNum`). Bridges surface it locally (web Debug panel / mGBA console); it is NOT forwarded to the server |
 | 0x10 | `BATTLE_EVENT` | sub u8, then: sub 1=ENCOUNTER_OPEN {kind u8, opponent u16}; sub 2=TURN_INPUT {turn u8, action u8, moveSlot u8, target u8, extra u16}; sub 3=OUTCOME {result u8: 1=win 2=loss 3=flee} |
-| 0x11 | `SAVED` | no payload — the game wrote its flash save (the ~10s autosave in `net_save.c`, or a manual START-menu save). The web bridge reacts by mirroring the .sav to IndexedDB and `PUT /api/save/<name>` |
+| 0x11 | `SAVED` | no payload — the game wrote its flash save (first save, map-change save, or a manual START-menu save). The web bridge reacts by mirroring the .sav to IndexedDB and `PUT /api/save/<name>` |
+| 0x12 | `SAVEBLOCKS` | mailboxAddr u32, saveCounter u32, lastWrittenSector u8, then 3 × {ptr u32, size u32} for SaveBlock2 / SaveBlock1 / PokemonStorage — the freeze-free save path (§1.7); emitted every ~10s from the overworld after `CopyPartyAndObjectsToSave` |
 | 0x7F | `HELLO` | version u8 — game finished booting netcode |
 
 #### Host → game
@@ -143,6 +144,24 @@ one TLV. Normative C handler: `NetOnAdminCmd` in `rom/overlay/src/net_admin.c`.
 | 6 | `WILD_BATTLE` | species u16, level u8 | scripted wild battle; only fires from a quiet overworld frame |
 | 7 | `RESET_TRAINER` | trainerId u16 | clear the trainer's defeated flag (rewards stay awarded) |
 | 8 | `SET_NAME` | up to 8 charmap bytes, EOS(0xFF)-padded | write the player's registered name into the save (server encodes ASCII → game charset) |
+### 1.7 Freeze-free saves (SAVEBLOCKS → `save.blocks` → forge)
+
+A real flash save halts the game ~2s (emulated flash handshakes), but the
+.sav is a pure function of three RAM blocks. So: every ~10s the ROM refreshes
+those blocks (`CopyPartyAndObjectsToSave`, a memcpy) and publishes their
+addresses/sizes + `gSaveCounter`/`gLastWrittenSector` via SAVEBLOCKS. The
+bridge — which runs between frames, so the snapshot is consistent by
+construction — reads the bytes and sends them as `save.blocks` (base64). The
+SERVER then forges a byte-exact .sav (`server/src/saveforge.js` mirrors
+`save.c`: counter+1, sector rotation, per-sector checksums/signature) onto
+the trainer's stored image and persists it. The game never freezes; real
+flash saves remain for manual saves, the first-join baseline, and map
+changes (where the pause hides in the transition).
+
+GBA→host address translation uses the mailbox as the fixed point:
+`heapOffset = mailboxHeapBase + (gbaPtr - mailboxAddr)` (browser), or
+`ewramOffset = gbaPtr - 0x02000000` (Lua).
+
 
 ---
 
@@ -178,6 +197,7 @@ Every message has `t` (type). Server assigns each connection an integer `slot`
 | `starter` | `species` int (252/255/258) | new-player kit: chosen starter lv5 + 5 Poké Balls + 3 Potions (once per connection) |
 | `cmd` | `line` string (≤200 chars) | console command (see `/help`); server replies `cmd.result` |
 | `resync` | — | fresh save requests the world flags/vars + identity again (reply: `sync` + `admin set_name`); sent by the ROM right after the multiplayer quick start |
+| `save.blocks` | `counter` int, `sector` int, `sb2`/`sb1`/`sto` base64 | freeze-free save snapshot (§1.7); the server forges + stores the trainer's .sav. Rate-limited server-side (≥3s apart) |
 | `speed` | `x` int 1–4 | set the shared emulator speed — one world, one clock |
 | `ping` | — | keepalive (expect `pong`) |
 
@@ -234,9 +254,10 @@ join. 404 when the host hasn't built one. The build never enters the git repo;
 it exists only on the host's server.
 
 `GET/PUT /api/save/<name>` — the trainer's game save (.sav flash image,
-≤256 KB). Bridges PUT it after every `SAVED` report; the join flow GETs it and
-stages it in the emulator before boot, so CONTINUE picks up where the last
-autosave left off on any device. Keys are the registry's case-insensitive
+≤256 KB). Bridges PUT it after every `SAVED` report, and the server itself
+refreshes the same file every ~10s from `save.blocks` forging (§1.7); the
+join flow GETs it and stages it in the emulator before boot, so CONTINUE
+picks up where the last sync left off on any device. Keys are the registry's case-insensitive
 trainer names (filename-safe characters only); files live in
 `server/data/saves/`. The server copy wins over the browser's IndexedDB copy
 at boot.
