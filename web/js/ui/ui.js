@@ -36,6 +36,8 @@ export class UI {
     this.#wireProximity();
     this.bridge.onParty = (mons) => this.#onOwnParty(mons);
     this.bridge.onLog = (text) => this.#debugLog(text);
+    const resetBtn = this.$('#btn-reset-storage');
+    if (resetBtn) resetBtn.onclick = () => this.resetEmulatorStorage();
     setInterval(() => this.#tickDurations(), 1000);
     setInterval(() => this.#tickProximity(), 500);
     setInterval(() => this.#tickDebug(), 500);
@@ -62,6 +64,21 @@ export class UI {
       ? `frame ${lf.fc} · ${states[lf.gs] ?? `state ${lf.gs}`} · mailbox: ${this.bridge.status}`
       : `mailbox: ${this.bridge.status}`;
     el.classList.toggle('warn', this.bridge.status === 'stalled');
+  }
+
+  // Last-resort recovery: a crashed session can corrupt the emulator's
+  // IndexedDB filesystem, which then garbles every later boot on this
+  // browser. Server-side saves make this safe to wipe.
+  async resetEmulatorStorage() {
+    if (!confirm('Clear this browser\'s cached emulator files and reload? Your progress is safe on the server.')) return;
+    try {
+      const dbs = (await indexedDB.databases?.()) ?? [];
+      await Promise.all(dbs.map((db) => new Promise((done) => {
+        const req = indexedDB.deleteDatabase(db.name);
+        req.onsuccess = req.onerror = req.onblocked = done;
+      })));
+    } catch { /* best effort */ }
+    location.reload();
   }
 
   #tickDurations() {

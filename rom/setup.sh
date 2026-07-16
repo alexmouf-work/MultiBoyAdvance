@@ -142,5 +142,10 @@ make -C "$PKE" modern -j"$(nproc)"
 
 mkdir -p "$OUT"
 cp "$PKE/pokeemerald_modern.gba" "$OUT/mba.gba"
-say "done → rom/$OUT/mba.gba"
+if command -v sha256sum >/dev/null; then
+  say "done → rom/$OUT/mba.gba (sha256 $(sha256sum "$OUT/mba.gba" | cut -c1-12)…)"
+  say "compare with the web client's Events log: 'ROM fingerprint …' must match"
+else
+  say "done → rom/$OUT/mba.gba"
+fi
 say "load it in the web client, or in desktop mGBA with rom/lua/mba-bridge.lua"

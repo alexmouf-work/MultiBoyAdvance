@@ -631,3 +631,11 @@ body.touch #gamewrap:not(.controls-below) #stick-base {
   align-items: flex-end;
 }
 #gamewrap:fullscreen.controls-below .pad, #gamewrap.fake-fullscreen.controls-below .pad { opacity: 1; }
+
+#btn-reset-storage {
+  width: 100%;
+  margin-top: 8px;
+  font-size: 12px;
+  padding: 6px 10px;
+  color: var(--dim);
+}

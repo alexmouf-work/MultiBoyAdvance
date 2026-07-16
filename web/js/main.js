@@ -105,6 +105,23 @@ async function fetchRomFile() {
   return new File([blob], 'mba.gba');
 }
 
+/** Fingerprint the downloaded ROM and compare against the server's own hash —
+ *  catches stale builds and corrupted transfers/storage in one line of log. */
+async function verifyRom(romFile, ui) {
+  try {
+    const digest = await crypto.subtle.digest('SHA-256', await romFile.arrayBuffer());
+    const hash = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+    const short = hash.slice(0, 12);
+    ui.log('rom', `ROM fingerprint ${short} · ${(romFile.size / 1024 / 1024).toFixed(1)} MiB`);
+    const info = await (await fetch('/api/rom-info')).json().catch(() => null);
+    if (info?.sha256 && info.sha256 !== hash) {
+      ui.log('error', `ROM download corrupted (server has ${info.sha256.slice(0, 12)}) — refresh the page`);
+    }
+  } catch {
+    // fingerprinting is diagnostics only; never block the boot
+  }
+}
+
 // ---- save persistence (browser IndexedDB + server copy) ----------------------
 
 const saveUrl = (name) => `/api/save/${encodeURIComponent(name)}`;
@@ -183,12 +200,35 @@ async function start(mode, romFile = null) {
   const playerName = $('#name').value.trim() || 'Player';
   if (romFile) {
     try {
+      if (mode !== 'demo') await verifyRom(romFile, ui);
       if (mode !== 'demo') await restoreSave(adapter, playerName, ui);
       await adapter.loadROM(romFile);
       ui.log('rom', `loaded ${romFile.name}`);
+      // Watchdog: a healthy netcode ROM plants its mailbox within seconds of
+      // boot. Never finding it means the build is stale/corrupt, or this
+      // browser's emulator storage is damaged from an earlier crash.
+      setTimeout(() => {
+        if (bridge.status === 'searching') {
+          const msg = 'game netcode never started — the ROM build on the server may be '
+            + 'stale/corrupt (host: re-run setup), or this browser\'s emulator storage is '
+            + 'damaged (use "Reset emulator storage" in the Debug panel)';
+          ui.log('error', msg);
+          bridge.onLog(`WATCHDOG: ${msg}`);
+        }
+      }, 20_000);
     } catch (err) {
       ui.log('error', String(err.message ?? err));
     }
+  }
+  // Typing in the console/name fields must not reach the emulator (it grabs
+  // keyboard input globally); suspend its input while any text field is focused.
+  if (adapter.setKeyboardCapture) {
+    document.addEventListener('focusin', (e) => {
+      if (e.target.matches('input[type="text"], input:not([type]), textarea')) {
+        adapter.setKeyboardCapture(false);
+      }
+    });
+    document.addEventListener('focusout', () => adapter.setKeyboardCapture(true));
   }
   // Every successful in-game save (the ~10s autosave or a manual SAVE) gets
   // mirrored to IndexedDB and the server.

@@ -67,6 +67,11 @@ export class MgbaAdapter {
     this.#module?.setFastForwardMultiplier(x);
   }
 
+  /** While a text field is focused the emulator must not eat keystrokes. */
+  setKeyboardCapture(enabled) {
+    this.#module?.toggleInput(enabled);
+  }
+
   // ---- save persistence ----
 
   /** Current .sav flash image, or null if none exists yet. */

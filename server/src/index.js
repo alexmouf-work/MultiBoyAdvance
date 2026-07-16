@@ -11,6 +11,7 @@ import https from 'node:https';
 import net from 'node:net';
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { config } from './config.js';
@@ -37,8 +38,26 @@ export function createServers(cfg = config) {
 
   // ---- static host (shared by the HTTP and HTTPS servers) ----
   const webRoot = path.resolve(cfg.webRoot);
+  const romInfoCache = { key: null, body: null };
   const requestHandler = (req, res) => {
     const url = new URL(req.url, 'http://x');
+
+    // ROM build fingerprint — lets the client verify its download matches
+    // what the host built (stale-build / corrupted-transfer diagnostics).
+    if (url.pathname === '/api/rom-info') {
+      fs.stat(cfg.romFile ?? '', (err, st) => {
+        if (err) return res.writeHead(404).end();
+        const cacheKey = `${st.mtimeMs}:${st.size}`;
+        if (romInfoCache.key !== cacheKey) {
+          const hash = crypto.createHash('sha256').update(fs.readFileSync(cfg.romFile)).digest('hex');
+          romInfoCache.key = cacheKey;
+          romInfoCache.body = JSON.stringify({ size: st.size, sha256: hash, builtAt: st.mtimeMs });
+        }
+        res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+        res.end(romInfoCache.body);
+      });
+      return;
+    }
 
     // Trainer roster for the join screen: every known player, online status,
     // and last/current location. Read-only; docs/PROTOCOL.md §2.4.

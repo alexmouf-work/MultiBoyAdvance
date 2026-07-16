@@ -169,6 +169,26 @@ test('/api/users lists the trainer registry for the join screen', async () => {
   srv.close();
 });
 
+test('/api/rom-info fingerprints the served build', async () => {
+  const cfg = testCfg();
+  const romDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mba-rominfo-'));
+  cfg.romFile = path.join(romDir, 'mba.gba');
+  fs.writeFileSync(cfg.romFile, Buffer.from([1, 2, 3, 4]));
+
+  const srv = createServers(cfg);
+  await new Promise((r) => srv.httpServer.listen(0, '127.0.0.1', r));
+  const port = srv.httpServer.address().port;
+
+  const info = await (await fetch(`http://127.0.0.1:${port}/api/rom-info`)).json();
+  assert.equal(info.size, 4);
+  // sha256 of 01 02 03 04
+  assert.equal(info.sha256, '9f64a747e1b97f131fabb6b447296c9b6f0201e79fb3c5356e6c77e89b6a806a');
+
+  fs.rmSync(cfg.romFile);
+  assert.equal((await fetch(`http://127.0.0.1:${port}/api/rom-info`)).status, 404);
+  srv.close();
+});
+
 test('/api/save round-trips per-trainer game saves', async () => {
   const cfg = testCfg();
   cfg.savesDir = fs.mkdtempSync(path.join(os.tmpdir(), 'mba-saves-'));
