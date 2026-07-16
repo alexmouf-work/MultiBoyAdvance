@@ -183,6 +183,13 @@ test('two browsers share one world end-to-end', async () => {
   }
   await roster.close();
 
+  // --- /resetlocal: wipes this browser's local data and reloads to login ---
+  await ben.evaluate(() => localStorage.setItem('mba.padScale', '150'));
+  await ben.fill('#console-in', '/resetlocal');
+  await ben.press('#console-in', 'Enter');
+  await ben.waitForSelector('#login:not([hidden])', { timeout: 10_000 });
+  assert.equal(await ben.evaluate(() => localStorage.length), 0, 'localStorage wiped');
+
   await ann.close();
   await ben.close();
 });

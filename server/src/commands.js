@@ -13,6 +13,7 @@ const HELP = [
   '/tp <player> — request to teleport to them (they accept)',
   '/warp <group> <map> <x> <y> — warp yourself to map coordinates',
   '/delete <name> — remove an offline trainer from the registry',
+  '/resetlocal — (browser) wipe this device\'s local data and reload',
 ].join('\n');
 
 function findTarget(world, me, word) {
@@ -132,6 +133,11 @@ export function runCommand(world, me, line) {
       if (!name) return { ok: false, msg: 'usage: /delete <name>' };
       return world.deleteUser(name);
     }
+
+    case '/resetlocal':
+      // Handled entirely in the browser client; reaching the server means
+      // this bridge (e.g. desktop mGBA) has no local web storage to wipe.
+      return { ok: false, msg: '/resetlocal only works in the browser client' };
 
     default:
       return { ok: false, msg: `unknown command — /help` };

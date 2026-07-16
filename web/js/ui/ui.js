@@ -69,8 +69,10 @@ export class UI {
   // Last-resort recovery: a crashed session can corrupt the emulator's
   // IndexedDB filesystem, which then garbles every later boot on this
   // browser. Server-side saves make this safe to wipe.
-  async resetEmulatorStorage() {
-    if (!confirm('Clear this browser\'s cached emulator files and reload? Your progress is safe on the server.')) return;
+  async wipeLocalData({ includePrefs = false } = {}) {
+    if (includePrefs) {
+      try { localStorage.clear(); } catch { /* best effort */ }
+    }
     try {
       const dbs = (await indexedDB.databases?.()) ?? [];
       await Promise.all(dbs.map((db) => new Promise((done) => {
@@ -79,6 +81,11 @@ export class UI {
       })));
     } catch { /* best effort */ }
     location.reload();
+  }
+
+  resetEmulatorStorage() {
+    if (!confirm('Clear this browser\'s cached emulator files and reload? Your progress is safe on the server.')) return;
+    this.wipeLocalData();
   }
 
   #tickDurations() {
@@ -319,8 +326,14 @@ export class UI {
       const line = input.value.trim();
       if (!line) return;
       this.#consolePrint(`> ${line}`, null);
-      this.socket.send({ t: 'cmd', line });
       input.value = '';
+      // Browser-local commands never reach the server.
+      if (line.toLowerCase() === '/resetlocal') {
+        this.#consolePrint('wiping this browser\'s local data (settings + cached emulator files), reloading…', true);
+        this.wipeLocalData({ includePrefs: true });
+        return;
+      }
+      this.socket.send({ t: 'cmd', line });
     };
     this.socket.on('cmd.result', (m) => this.#consolePrint(m.msg, m.ok));
   }
