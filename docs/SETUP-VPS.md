@@ -15,19 +15,26 @@ powershell -ExecutionPolicy Bypass -File scripts\deploy-mba.ps1 -HostAddr <box-i
 
 ## Recommended: Hetzner (~€4/month)
 
-Best price/performance in this class, 20 TB monthly traffic included, and a
-static IPv4 comes with the box — no reserved-IP dance, no double firewall.
+Best price/performance in this class, a generous traffic allowance (~20 TB),
+and no double-firewall dance (Hetzner's Ubuntu image ships with no host
+firewall blocking 80/443).
 
 1. Sign up at console.hetzner.com (card/PayPal; new accounts sometimes get an
    identity check).
-2. *Create server*: location **Falkenstein** or **Nuremberg** (close to
-   Greece), image **Ubuntu 24.04**, type **CAX11** (2 ARM vCPU / 4 GB,
-   €3.79/mo — our stack is pure JS, ARM is perfect; several friend-scale
-   projects fit alongside). Add your SSH key
-   (`ssh-keygen -t ed25519`, paste `~\.ssh\id_ed25519.pub`).
-   Skip the optional Cloud Firewall, or if you add one: allow inbound TCP
-   22/80/443.
-3. Note the server's IPv4 (static for the life of the server).
+2. *Create server*: location **Falkenstein** or **Nuremberg** (Germany —
+   closest to Greece; Helsinki also fine), image **Ubuntu 24.04**, type
+   **CAX11** (2 ARM vCPU / 4 GB / 40 GB SSD — our stack is pure JS, ARM is
+   perfect; several friend-scale projects fit alongside). **~€4.99/mo with a
+   public IPv4** (the box is ~€4.49 + €0.50 for the IPv4).
+   - **Networking: make sure "Public IPv4" is ticked.** New Hetzner servers
+     default to IPv6, and IPv6-only won't work for our A-record + typical home
+     clients. IPv4 is the €0.50 line item — keep it.
+   - **SSH key: add it *now*, at creation** (you can't add one via the console
+     afterwards). On your PC: `ssh-keygen -t ed25519`, then paste the contents
+     of `~\.ssh\id_ed25519.pub`.
+   - Skip the optional Cloud Firewall (or if you add one, allow inbound TCP
+     22/80/443).
+3. Note the server's public **IPv4** (static for the life of the server).
 4. Run the two commands above (ssh in as `root` on Hetzner — use
    `-User root` for the deploy script).
 5. Vercel DNS: point the `mba` **A record** at that IP. Done:
