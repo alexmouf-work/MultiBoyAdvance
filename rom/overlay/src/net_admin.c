@@ -151,6 +151,20 @@ static bool8 AdminApply(const u8 *p, u8 len)
             gSaveBlock2Ptr->playerName[PLAYER_NAME_LENGTH] = EOS;
         }
         break;
+    case NET_ADMIN_TAKE_MON:
+        // Trade give-away: remove the party mon at slot p[1] — but only if it
+        // is still the species the server validated (a reshuffled party must
+        // not cost the wrong Pokémon). Compact so no gap is left mid-party.
+        if (len >= 4 && AdminSlotValid(p[1])
+            && GetMonData(&gPlayerParty[p[1]], MON_DATA_SPECIES, NULL) == RD_U16(p, 2))
+        {
+            ZeroMonData(&gPlayerParty[p[1]]);
+            CompactPartySlots();
+            CalculatePlayerPartyCount();
+            NetSendFullParty(); // re-report the post-trade party
+            NetSendPartySummary();
+        }
+        break;
     }
     return TRUE;
 }

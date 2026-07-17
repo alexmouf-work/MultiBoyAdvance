@@ -13,6 +13,9 @@ import { forgeSave, FLASH_SIZE, SECTOR_DATA_SIZE } from '../saveforge.js';
 
 const DESPAWN_STATE = 255;
 const TP_REQUEST_TTL_MS = 60_000;
+const TRADE_OFFER_TTL_MS = 120_000; // 2 min to answer a trade offer
+const TRADE_MAX_ITEMS = 8; // per side
+const TRADE_MAX_MONS = 6; // per side
 
 // Hoenn starters + the kit every new player gets alongside one. These are the
 // ROM's INTERNAL Hoenn species order (pokeemerald constants), NOT National Dex
@@ -53,6 +56,7 @@ class Client {
     this.party = []; // latest party summary [{sp,lv,hp}]
     this.fullMons = []; // latest full wire mons [{lv, b:[32 ints]}]
     this.tpRequests = new Map(); // requester slot -> timestamp (awaiting our accept)
+    this.tradeOffers = new Map(); // proposer slot -> {at, give, want} (awaiting our answer)
     this.starterAt = 0; // last starter grant (retryable while the party is empty)
     this.joinedAt = Date.now();
     this.lastSeen = Date.now();
@@ -133,6 +137,13 @@ export class World {
       const i = session.participants.indexOf(client);
       if (i >= 0) session.participants.splice(i, 1);
     }
+    // Trade GC: cancel offers the leaver had received (tell the proposers) and
+    // drop any pending offers the leaver had made to others.
+    for (const [proposerSlot] of client.tradeOffers) {
+      this.clients.get(proposerSlot)?.send({ t: 'trade.cancelled', from: client.slot, reason: 'offline' });
+    }
+    client.tradeOffers.clear();
+    for (const c of this.clients.values()) c.tradeOffers.delete(client.slot);
   }
 
   /** Remove a trainer from the registry (offline only). Used by /delete. */
@@ -181,6 +192,9 @@ export class World {
       case 'pvp': return this._onPvp(client, msg);
       case 'pvp.accept': return this._onPvpAccept(client, msg);
       case 'trade.give': return this._onTradeGive(client, msg);
+      case 'trade.offer': return this._onTradeOffer(client, msg);
+      case 'trade.accept': return this._onTradeAccept(client, msg);
+      case 'trade.reject': return this._onTradeReject(client, msg);
       case 'starter': return this._onStarter(client, msg);
       case 'resync': return this._onResync(client);
       case 'save.blocks': return this._onSaveBlocks(client, msg);
@@ -359,6 +373,133 @@ export class World {
     client.send({ t: 'admin', sub: 'take_item', item, qty });
     target.send({ t: 'admin', sub: 'give_item', item, qty });
     target.send({ t: 'trade.recv', from: client.slot, name: client.name, item, qty });
+  }
+
+  // ---- trading (docs/plans/TRADING.md) ---------------------------------------
+  // Any two ONLINE players, unlimited distance. Offer → accept / counter
+  // (reject + fresh reverse offer) / reject. Mirrors the teleport handshake:
+  // the pending offer lives on the TARGET with a TTL and is verified at accept.
+  //
+  // Terms shape (one side): { items: [{id, qty}], mons: [...] }.
+  //   give.mons — the proposer's OWN party: {slot, sp} (slot authoritative,
+  //   species snapshot verified at accept against the server-held wire party).
+  //   want.mons — a request from the target, composed blind: {sp} only; the
+  //   species is resolved to a party slot of the ACCEPTOR at accept time.
+
+  /** Clamp/normalize one side's terms. `own` = terms refer to the sender's party. */
+  _normTradeTerms(terms, own) {
+    const t = typeof terms === 'object' && terms !== null ? terms : {};
+    const items = (Array.isArray(t.items) ? t.items : [])
+      .slice(0, TRADE_MAX_ITEMS)
+      .map((i) => ({ id: (i?.id | 0) & 0xffff, qty: Math.min(999, Math.max(1, i?.qty | 0)) }))
+      .filter((i) => i.id >= 1);
+    const seen = new Set();
+    const mons = (Array.isArray(t.mons) ? t.mons : [])
+      .slice(0, TRADE_MAX_MONS)
+      .map((m) => (own
+        ? { slot: m?.slot | 0, sp: (m?.sp | 0) & 0xffff } // own party: slot + snapshot
+        : { sp: (m?.sp | 0) & 0xffff })) // blind request: species only
+      .filter((m) => m.sp >= 1
+        && (!own || (m.slot >= 0 && m.slot < 6 && !seen.has(m.slot) && seen.add(m.slot))));
+    return { items, mons };
+  }
+
+  _wireSpecies(fullMon) {
+    return fullMon ? (fullMon.b[8] | (fullMon.b[9] << 8)) : 0;
+  }
+
+  /** Every {slot, sp} still matches the giver's server-held party, and the
+   *  giver keeps at least one party mon (an empty overworld party is unsafe). */
+  _validGiveMons(giver, mons) {
+    if (mons.length === 0) return true;
+    if (mons.length >= giver.fullMons.length) return false; // must keep ≥1
+    return mons.every((m) => this._wireSpecies(giver.fullMons[m.slot]) === m.sp);
+  }
+
+  /** Resolve blind species requests to distinct party slots of `owner`.
+   *  @returns {Array<{slot, sp}>|null} null if any species is missing. */
+  _resolveWantMons(owner, wantMons) {
+    const used = new Set();
+    const resolved = [];
+    for (const w of wantMons) {
+      const slot = owner.fullMons.findIndex(
+        (m, i) => !used.has(i) && this._wireSpecies(m) === w.sp,
+      );
+      if (slot < 0) return null;
+      used.add(slot);
+      resolved.push({ slot, sp: w.sp });
+    }
+    if (resolved.length > 0 && resolved.length >= owner.fullMons.length) return null; // must keep ≥1
+    return resolved;
+  }
+
+  _onTradeOffer(client, msg) {
+    const target = this.clients.get(msg.to);
+    if (!target || target === client) return client.send({ t: 'error', msg: 'player not available' });
+    const give = this._normTradeTerms(msg.give, true);
+    const want = this._normTradeTerms(msg.want, false);
+    if (!give.items.length && !give.mons.length && !want.items.length && !want.mons.length) {
+      return client.send({ t: 'error', msg: 'empty trade' });
+    }
+    if (!this._validGiveMons(client, give.mons)) {
+      return client.send({ t: 'error', msg: 'you cannot offer those Pokémon (check your party; keep at least one)' });
+    }
+    // A newer offer from the same proposer supersedes the previous one.
+    target.tradeOffers.set(client.slot, { at: Date.now(), give, want });
+    target.send({ t: 'trade.req', from: client.slot, name: client.name, give, want });
+  }
+
+  _onTradeReject(client, msg) {
+    if (!client.tradeOffers.delete(msg.from)) return;
+    this.clients.get(msg.from)?.send({ t: 'trade.cancelled', from: client.slot, reason: 'rejected' });
+  }
+
+  _onTradeAccept(client, msg) {
+    const offer = client.tradeOffers.get(msg.from);
+    client.tradeOffers.delete(msg.from); // consumed either way
+    const proposer = this.clients.get(msg.from);
+    const fail = (why) => {
+      client.send({ t: 'trade.done', ok: false, with: msg.from, msg: why });
+      proposer?.send({ t: 'trade.done', ok: false, with: client.slot, msg: why });
+    };
+    if (!offer || Date.now() - offer.at > TRADE_OFFER_TTL_MS) return fail('offer expired');
+    if (!proposer) return fail('trader went offline');
+    // Re-validate BOTH directions against the parties as they are NOW.
+    if (!this._validGiveMons(proposer, offer.give.mons)) return fail('their party changed — trade cancelled');
+    const wantResolved = this._resolveWantMons(client, offer.want.mons);
+    if (!wantResolved) return fail('your party no longer matches the request — trade cancelled');
+
+    this._tradeLeg(proposer, client, offer.give);
+    this._tradeLeg(client, proposer, { items: offer.want.items, mons: wantResolved });
+
+    const summary = `${this._describeTerms(offer.give)} ⇄ ${this._describeTerms({ items: offer.want.items, mons: wantResolved })}`;
+    client.send({ t: 'trade.done', ok: true, with: proposer.slot, summary });
+    proposer.send({ t: 'trade.done', ok: true, with: client.slot, summary });
+  }
+
+  /** Execute one direction: giver loses, taker gains. Takes are sent before
+   *  gives, and mons in DESCENDING slot order — the ROM compacts the party
+   *  after each removal, so ascending order would shift later indices. */
+  _tradeLeg(giver, taker, terms) {
+    const mons = [...terms.mons].sort((a, b) => b.slot - a.slot);
+    for (const m of mons) {
+      const wire = giver.fullMons[m.slot]?.b;
+      if (!wire) continue; // validated above; belt-and-suspenders
+      giver.send({ t: 'admin', sub: 'take_mon', slot: m.slot, sp: m.sp });
+      taker.send({ t: 'trade.deliver', from: giver.slot, b: wire });
+    }
+    for (const it of terms.items) {
+      giver.send({ t: 'admin', sub: 'take_item', item: it.id, qty: it.qty });
+      taker.send({ t: 'admin', sub: 'give_item', item: it.id, qty: it.qty });
+    }
+  }
+
+  _describeTerms(terms) {
+    const bits = [
+      ...terms.mons.map((m) => `#${m.sp}`),
+      ...terms.items.map((i) => `item ${i.id}×${i.qty}`),
+    ];
+    return bits.join(', ') || 'nothing';
   }
 
   // New-player kit: chosen starter at lv5 (their only Pokémon), plus balls

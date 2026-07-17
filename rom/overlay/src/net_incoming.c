@@ -78,6 +78,9 @@ void NetApplyIncoming(void)
         case NET_MSG_ADMIN:
             NetOnAdminCmd(payload, len);
             break;
+        case NET_MSG_TRADE_DELIVER:
+            NetOnTradeDeliver(payload, len);
+            break;
         default:
             break; // forward-compatible: skip unknown types
         }

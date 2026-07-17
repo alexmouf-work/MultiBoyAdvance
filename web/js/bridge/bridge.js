@@ -218,6 +218,9 @@ export class Bridge {
       const payload = enc.admin(m);
       if (payload) this.#queueIn(T.ADMIN, payload);
     });
+    // Trade delivery: the received wire mon goes straight into the game, which
+    // applies it on a safe overworld frame (party, or PC when full).
+    s.on('trade.deliver', (m) => this.#queueIn(T.TRADE_DELIVER, enc.tradeDeliver(m.b)));
   }
 
   /** UI joins a battle session on the player's behalf. */

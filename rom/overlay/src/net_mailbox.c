@@ -15,6 +15,7 @@ void NetApplyIncoming(void);
 void NetWarpTick(void);
 void NetBattleTick(void);
 void NetAdminTick(void);
+void NetTradeTick(void);
 void NetFlagsTick(void);
 void NetSaveTick(void);
 
@@ -151,6 +152,7 @@ void NetTick(void)
     NetBattleTick();
     NetWarpTick();
     NetAdminTick();
+    NetTradeTick();
     NetFlagsTick();
     NetSaveTick();
 }

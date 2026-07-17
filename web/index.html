@@ -123,6 +123,50 @@
         </div>
       </div>
 
+      <!-- player-to-player trade: review an incoming offer, or compose one.
+           One modal, two modes (#trade-review / #trade-edit). -->
+      <div id="trade-modal" hidden>
+        <div class="trade-card">
+          <h2 id="trade-title">Trade</h2>
+
+          <div id="trade-review" hidden>
+            <p class="trade-head" id="trade-offer-head">They offer…</p>
+            <ul id="trade-offer-list" class="trade-list"></ul>
+            <p class="trade-head">In exchange for…</p>
+            <ul id="trade-want-list" class="trade-list"></ul>
+            <div class="trade-actions">
+              <button id="trade-accept" data-action="trade-accept" class="primary">Accept</button>
+              <button id="trade-counter" data-action="trade-counter">Counter-offer</button>
+              <button id="trade-reject" data-action="trade-reject" class="ghost">Reject</button>
+            </div>
+          </div>
+
+          <div id="trade-edit" hidden>
+            <p class="trade-head">You give — tap party Pokémon to include:</p>
+            <div id="trade-give-mons" class="trade-picks"></div>
+            <div class="trade-add">
+              <input id="trade-give-item" type="number" min="1" max="65535" placeholder="item id" />
+              <input id="trade-give-qty" type="number" min="1" max="999" value="1" />
+              <button id="trade-add-item" type="button">+ item</button>
+            </div>
+            <ul id="trade-give-items" class="trade-list removable"></ul>
+            <p class="trade-head">You want from them:</p>
+            <div class="trade-add">
+              <input id="trade-want-species" type="number" min="1" max="65535" placeholder="species id" />
+              <button id="trade-add-want-mon" type="button">+ Pokémon</button>
+              <input id="trade-want-item" type="number" min="1" max="65535" placeholder="item id" />
+              <input id="trade-want-qty" type="number" min="1" max="999" value="1" />
+              <button id="trade-add-want-item" type="button">+ item</button>
+            </div>
+            <ul id="trade-want-edit" class="trade-list removable"></ul>
+            <div class="trade-actions">
+              <button id="trade-send" data-action="trade-send" class="primary">Send offer</button>
+              <button id="trade-cancel" data-action="trade-cancel" class="ghost">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- fullscreen-only: opens the same controls the bar has outside -->
       <button id="btn-options">⚙ OPTIONS</button>
       <div id="options-panel"></div>

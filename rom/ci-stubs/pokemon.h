@@ -63,3 +63,5 @@ void CalculateMonStats(struct Pokemon *mon);
 u8 GiveMonToPlayer(struct Pokemon *mon);
 void ZeroPlayerPartyMons(void);
 u8 CalculatePlayerPartyCount(void);
+void ZeroMonData(struct Pokemon *mon);
+void CompactPartySlots(void);

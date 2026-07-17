@@ -295,7 +295,7 @@ async function start(mode, romFile = null) {
   // keyboard input globally); suspend its input while any text field is focused.
   if (adapter.setKeyboardCapture) {
     document.addEventListener('focusin', (e) => {
-      if (e.target.matches('input[type="text"], input:not([type]), textarea')) {
+      if (e.target.matches('input[type="text"], input[type="number"], input:not([type]), textarea')) {
         adapter.setKeyboardCapture(false);
       }
     });

@@ -138,10 +138,26 @@ test('admin codec: every sub round-trips through enc/dec', () => {
     { sub: 'wild_battle', species: 384, level: 70 },
     { sub: 'reset_trainer', trainer: 0x35f },
     { sub: 'set_name', name: [0xbb, 0xd6, 0x00, 0xaa, 0xee, 0xff, 0xff, 0xff] },
+    { sub: 'take_mon', slot: 5, sp: 283 },
   ];
   for (const m of cases) {
     assert.deepEqual(dec.admin(enc.admin(m)), m, m.sub);
   }
   assert.equal(enc.admin({ sub: 'bogus' }), null);
   assert.equal(dec.admin(Uint8Array.from([99])).sub, 'unknown');
+});
+
+test('trade.deliver codec: 32 wire bytes through, species/level picked out', () => {
+  const b = new Array(32).fill(0);
+  b[8] = 283 & 0xff; // Mudkip (internal Hoenn order)
+  b[9] = 283 >> 8;
+  b[20] = 17;
+  const payload = enc.tradeDeliver(b);
+  assert.equal(payload.length, 32);
+  const d = dec.tradeDeliver(payload);
+  assert.deepEqual(d.b, b);
+  assert.equal(d.sp, 283);
+  assert.equal(d.lv, 17);
+  // short/overlong inputs are clamped to the wire size
+  assert.equal(enc.tradeDeliver([...b, 99, 99]).length, 32);
 });

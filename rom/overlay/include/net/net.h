@@ -21,6 +21,17 @@ void NetOnBattleOpen(u8 kind, u16 opponent);
 void NetSendPartySummary(void);
 void NetSendFullParty(void);
 
+// 32-byte wire-mon codec (net_battle.c; layout docs/PROTOCOL.md §1.5).
+// Shared by the co-op merged-party path and trading (net_trade.c).
+struct Pokemon;
+void MonToWire(struct Pokemon *mon, u8 *w);
+void MonFromWire(const u8 *w, struct Pokemon *mon);
+
+// Trading (net_trade.c): NET_MSG_TRADE_DELIVER enqueues a received wire mon;
+// NetTradeTick applies it on a safe overworld frame (party or PC on overflow).
+void NetOnTradeDeliver(const u8 *payload, u8 len);
+void NetTradeTick(void);
+
 // battle_main.c hook — call at the top of
 // CheckFocusPunch_ClearVarsBeforeTurnStarts to report finalized turn choices
 // (emit-only; no effect on battle state).

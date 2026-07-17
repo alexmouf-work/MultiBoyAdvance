@@ -17,6 +17,9 @@ const CLIENT_MESSAGES = {
   pvp: ['to'],
   'pvp.accept': ['from'],
   'trade.give': ['to', 'item', 'qty'],
+  'trade.offer': ['to'], // give/want term objects — validated in the handler
+  'trade.accept': ['from'],
+  'trade.reject': ['from'], // also "counter": reject, then send a fresh trade.offer
   starter: ['species'],
   resync: [], // fresh save asks for the world flags/vars + identity again
   'save.blocks': ['counter', 'sector'], // sb2/sb1/sto: base64 strings — checked in the handler

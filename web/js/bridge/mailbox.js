@@ -36,6 +36,7 @@ export const T = {
   ASSIGN: 0x86,
   BATTLE_CMD: 0x90,
   ADMIN: 0x91,
+  TRADE_DELIVER: 0x92, // one 32-byte wire mon received in a trade
 };
 
 export const GAME_STATE = { BOOT: 0, OVERWORLD: 1, BATTLE: 2, MENU: 3, OTHER: 4 };
@@ -190,9 +191,13 @@ export const enc = {
       case 'set_name':
         // name = server-side charmap bytes, already EOS-padded to 8
         return Uint8Array.from([8, ...(m.name ?? []).slice(0, 8).map((b) => b & 0xff)]);
+      case 'take_mon': // trade give-away: remove party slot (species verified)
+        return Uint8Array.from([9, m.slot, m.sp & 0xff, m.sp >> 8]);
       default: return null;
     }
   },
+  // One traded-in wire mon (§1.5), forwarded verbatim to the game.
+  tradeDeliver: (b) => Uint8Array.from((b ?? []).slice(0, MON_WIRE_SIZE).map((x) => x & 0xff)),
 };
 
 export const dec = {
@@ -268,7 +273,10 @@ export const dec = {
       case 6: return { sub: 'wild_battle', species: readU16(p, 1), level: p[3] };
       case 7: return { sub: 'reset_trainer', trainer: readU16(p, 1) };
       case 8: return { sub: 'set_name', name: [...p.slice(1)] };
+      case 9: return { sub: 'take_mon', slot: p[1], sp: readU16(p, 2) };
       default: return { sub: 'unknown' };
     }
   },
+  // NET_MSG_TRADE_DELIVER: the 32 wire bytes, with species/level pre-picked.
+  tradeDeliver: (p) => ({ b: [...p.slice(0, MON_WIRE_SIZE)], sp: readU16(p, 8), lv: p[20] }),
 };

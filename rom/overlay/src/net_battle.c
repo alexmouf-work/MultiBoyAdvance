@@ -73,8 +73,9 @@ void NetOnBattleOpen(u8 kind, u16 opponent)
 }
 
 // ---- 32-byte wire-mon codec (layout: mailbox.h / docs/PROTOCOL.md §1.5) ----
+// Exported via net/net.h: net_trade.c reuses it to apply traded Pokémon.
 
-static void MonToWire(struct Pokemon *mon, u8 *w)
+void MonToWire(struct Pokemon *mon, u8 *w)
 {
     u32 ivs = 0;
     u32 i;
@@ -94,7 +95,7 @@ static void MonToWire(struct Pokemon *mon, u8 *w)
         w[26 + i] = GetMonData(mon, MON_DATA_HP_EV + i, NULL);
 }
 
-static void MonFromWire(const u8 *w, struct Pokemon *mon)
+void MonFromWire(const u8 *w, struct Pokemon *mon)
 {
     u32 personality = RD_U32(w, 0);
     u32 otId = RD_U32(w, 4);

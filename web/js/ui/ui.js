@@ -29,11 +29,14 @@ export class UI {
     this.players = new Map(); // slot -> {name, joinedAt (local clock)}
     this.directory = []; // every trainer the server knows (incl. offline)
     this.ghosts = new Map(); // slot -> last ghost pos (proximity checks)
+    this.myParty = []; // own party summary [{sp,lv,hp}] (trade picker source)
+    this.trade = null; // open trade modal state (docs/plans/TRADING.md §8.2)
     this.$ = (sel) => document.querySelector(sel);
     this.#wire();
     this.#wireConsole();
     this.#wireStarter();
     this.#wireProximity();
+    this.#wireTrade();
     this.bridge.onParty = (mons) => this.#onOwnParty(mons);
     this.bridge.onLog = (text) => this.#debugLog(text);
     const resetBtn = this.$('#btn-reset-storage');
@@ -147,7 +150,11 @@ export class UI {
         pvp.textContent = 'battle';
         pvp.dataset.action = 'pvp';
         pvp.onclick = () => this.socket.send({ t: 'pvp', to: slot });
-        actions.append(tp, pvp);
+        const tr = document.createElement('button');
+        tr.textContent = 'trade';
+        tr.dataset.action = 'trade';
+        tr.onclick = () => this.#openTradeEditor(slot);
+        actions.append(tp, pvp, tr);
         li.append(actions);
       }
       ul.append(li);
@@ -237,6 +244,23 @@ export class UI {
       this.#toast(`🎁 ${m.name} sent you item #${m.item} ×${m.qty}`, { ttl: 8000 });
       this.log('trade', `${m.name} sent item ${m.item} ×${m.qty}`);
     });
+    s.on('trade.req', (m) => {
+      this.log('trade', `${m.name} offered a trade`);
+      this.#toast(`🔁 ${m.name} has offered a trade`, {
+        ttl: 115_000, // just under the server's 2-min offer TTL
+        action: 'trade-open',
+        label: 'Open',
+        onAction: () => this.#openTradeReview(m),
+      });
+    });
+    s.on('trade.cancelled', (m) => {
+      this.#toast('❌ trade cancelled', { ttl: 6000 });
+      this.log('trade', `trade with P${m.from + 1} cancelled (${m.reason ?? '?'})`);
+    });
+    s.on('trade.done', (m) => {
+      this.#toast(m.ok ? `✅ trade complete — ${m.summary ?? ''}` : `⚠️ trade failed — ${m.msg ?? ''}`, { ttl: 8000 });
+      this.log('trade', m.ok ? `trade complete: ${m.summary ?? ''}` : `trade failed: ${m.msg ?? ''}`);
+    });
     s.on('admin', (m) => this.log('admin', this.#adminText(m)));
     s.on('error', (m) => this.log('error', m.msg));
   }
@@ -250,6 +274,7 @@ export class UI {
       case 'give_xp': return `party slot ${m.slot + 1} gained ${m.xp} xp`;
       case 'wild_battle': return `a wild Pokémon #${m.species} lv${m.level} appears!`;
       case 'reset_trainer': return `trainer ${m.trainer} reset`;
+      case 'take_mon': return `party slot ${m.slot + 1} (Pokémon #${m.sp}) traded away`;
       default: return `admin: ${m.sub}`;
     }
   }
@@ -369,7 +394,193 @@ export class UI {
   #onOwnParty(mons) {
     // The ROM reports the party once online (even when empty); an empty party
     // means a fresh save that still needs its starter.
+    this.myParty = mons;
     this.$('#starter-modal').hidden = mons.length !== 0;
+    // A live trade editor should track party changes (e.g. mid-edit level-up).
+    if (this.trade?.mode === 'edit') this.#renderTradeEdit();
+  }
+
+  // ---- trading GUI (docs/plans/TRADING.md §8) --------------------------------
+  // One modal, two modes. Review: an incoming offer with Accept / Counter /
+  // Reject. Edit: compose an offer — pick own party mons by tapping chips,
+  // add items by id, request species/items from the other side (blind).
+
+  #termLabel(x) {
+    return x.sp !== undefined ? `Pokémon #${x.sp}` : `item #${x.id} ×${x.qty}`;
+  }
+
+  #tradePeerName(slot) {
+    return this.players.get(slot)?.name ?? `P${slot + 1}`;
+  }
+
+  #closeTrade() {
+    this.trade = null;
+    this.$('#trade-modal').hidden = true;
+  }
+
+  #openTradeReview(m) {
+    this.trade = { mode: 'review', peer: m.from, incoming: m };
+    this.$('#trade-title').textContent = `${m.name ?? this.#tradePeerName(m.from)} offers a trade`;
+    this.$('#trade-offer-head').textContent = `${m.name ?? this.#tradePeerName(m.from)} offers…`;
+    const fill = (sel, terms) => {
+      const ul = this.$(sel);
+      ul.innerHTML = '';
+      const entries = [...(terms?.mons ?? []), ...(terms?.items ?? [])];
+      for (const x of entries) {
+        const li = document.createElement('li');
+        li.textContent = this.#termLabel(x);
+        ul.append(li);
+      }
+      if (!entries.length) {
+        const li = document.createElement('li');
+        li.textContent = 'nothing';
+        ul.append(li);
+      }
+    };
+    fill('#trade-offer-list', m.give);
+    fill('#trade-want-list', m.want);
+    this.$('#trade-review').hidden = false;
+    this.$('#trade-edit').hidden = true;
+    this.$('#trade-modal').hidden = false;
+  }
+
+  /** @param {number} peer @param {object|null} prefill counter-offer seed */
+  #openTradeEditor(peer, prefill = null) {
+    this.trade = {
+      mode: 'edit',
+      peer,
+      giveSel: prefill?.giveSel ?? new Set(),
+      giveItems: prefill?.giveItems ?? [],
+      wantMons: prefill?.wantMons ?? [],
+      wantItems: prefill?.wantItems ?? [],
+    };
+    this.$('#trade-title').textContent = `Offer a trade to ${this.#tradePeerName(peer)}`;
+    this.$('#trade-review').hidden = true;
+    this.$('#trade-edit').hidden = false;
+    this.$('#trade-modal').hidden = false;
+    this.#renderTradeEdit();
+  }
+
+  /** Counter-offer: swap the incoming terms into an editable reverse offer —
+   *  what they wanted becomes what I give (party slots matched by species),
+   *  what they gave becomes what I want. */
+  #counterPrefill(m) {
+    const giveSel = new Set();
+    for (const w of m.want?.mons ?? []) {
+      const idx = this.myParty.findIndex((mon, i) => !giveSel.has(i) && mon.sp === w.sp);
+      if (idx >= 0) giveSel.add(idx);
+    }
+    return {
+      giveSel,
+      giveItems: (m.want?.items ?? []).map((i) => ({ id: i.id, qty: i.qty })),
+      wantMons: (m.give?.mons ?? []).map((g) => g.sp),
+      wantItems: (m.give?.items ?? []).map((i) => ({ id: i.id, qty: i.qty })),
+    };
+  }
+
+  #renderTradeEdit() {
+    const st = this.trade;
+    if (!st || st.mode !== 'edit') return;
+    const picks = this.$('#trade-give-mons');
+    picks.innerHTML = '';
+    this.myParty.forEach((mon, idx) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = `#${mon.sp} lv${mon.lv}`;
+      b.dataset.idx = idx;
+      b.classList.toggle('sel', st.giveSel.has(idx));
+      b.onclick = () => {
+        if (st.giveSel.has(idx)) st.giveSel.delete(idx);
+        else st.giveSel.add(idx);
+        this.#renderTradeEdit();
+      };
+      picks.append(b);
+    });
+    // Removable chips: clicking one deletes it from its backing state array.
+    const chip = (ul, text, remove) => {
+      const li = document.createElement('li');
+      li.textContent = text;
+      li.title = 'remove';
+      li.onclick = () => {
+        remove();
+        this.#renderTradeEdit();
+      };
+      ul.append(li);
+    };
+    const giveUl = this.$('#trade-give-items');
+    giveUl.innerHTML = '';
+    st.giveItems.forEach((it, i) => chip(giveUl, `item #${it.id} ×${it.qty}`, () => st.giveItems.splice(i, 1)));
+    const wantUl = this.$('#trade-want-edit');
+    wantUl.innerHTML = '';
+    st.wantMons.forEach((sp, i) => chip(wantUl, `Pokémon #${sp}`, () => st.wantMons.splice(i, 1)));
+    st.wantItems.forEach((it, i) => chip(wantUl, `item #${it.id} ×${it.qty}`, () => st.wantItems.splice(i, 1)));
+  }
+
+  #wireTrade() {
+    const st = () => this.trade;
+    this.$('#trade-accept').onclick = () => {
+      if (st()?.incoming) this.socket.send({ t: 'trade.accept', from: st().incoming.from });
+      this.#closeTrade();
+    };
+    this.$('#trade-reject').onclick = () => {
+      if (st()?.incoming) this.socket.send({ t: 'trade.reject', from: st().incoming.from });
+      this.#closeTrade();
+    };
+    this.$('#trade-counter').onclick = () => {
+      const m = st()?.incoming;
+      if (!m) return this.#closeTrade();
+      // Counter = reject + a fresh reverse offer (owner's spec).
+      this.socket.send({ t: 'trade.reject', from: m.from });
+      this.#openTradeEditor(m.from, this.#counterPrefill(m));
+    };
+    this.$('#trade-cancel').onclick = () => this.#closeTrade();
+    this.$('#trade-send').onclick = () => {
+      const s = st();
+      if (!s || s.mode !== 'edit') return;
+      const give = {
+        items: s.giveItems,
+        mons: [...s.giveSel].sort((a, b) => a - b)
+          .filter((i) => this.myParty[i])
+          .map((i) => ({ slot: i, sp: this.myParty[i].sp })),
+      };
+      const want = { items: s.wantItems, mons: s.wantMons.map((sp) => ({ sp })) };
+      if (!give.items.length && !give.mons.length && !want.items.length && !want.mons.length) {
+        this.#toast('⚠️ an empty trade has nothing to offer', { ttl: 5000 });
+        return;
+      }
+      this.socket.send({ t: 'trade.offer', to: s.peer, give, want });
+      this.log('trade', `trade offer sent to ${this.#tradePeerName(s.peer)}`);
+      this.#toast('🔁 trade offer sent', { ttl: 5000 });
+      this.#closeTrade();
+    };
+    // "+ item" / "+ Pokémon" rows
+    const readInt = (sel, lo, hi) => {
+      const v = Number(this.$(sel).value);
+      return Number.isInteger(v) && v >= lo && v <= hi ? v : null;
+    };
+    this.$('#trade-add-item').onclick = () => {
+      const id = readInt('#trade-give-item', 1, 0xffff);
+      const qty = readInt('#trade-give-qty', 1, 999) ?? 1;
+      if (id === null || !st()) return;
+      st().giveItems.push({ id, qty });
+      this.$('#trade-give-item').value = '';
+      this.#renderTradeEdit();
+    };
+    this.$('#trade-add-want-mon').onclick = () => {
+      const sp = readInt('#trade-want-species', 1, 0xffff);
+      if (sp === null || !st()) return;
+      st().wantMons.push(sp);
+      this.$('#trade-want-species').value = '';
+      this.#renderTradeEdit();
+    };
+    this.$('#trade-add-want-item').onclick = () => {
+      const id = readInt('#trade-want-item', 1, 0xffff);
+      const qty = readInt('#trade-want-qty', 1, 999) ?? 1;
+      if (id === null || !st()) return;
+      st().wantItems.push({ id, qty });
+      this.$('#trade-want-item').value = '';
+      this.#renderTradeEdit();
+    };
   }
 
   // ---- ghost proximity: stand next to another player to interact ----

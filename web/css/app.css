@@ -356,6 +356,68 @@ button.ghost { background: transparent; }
 .starter-row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
 .starter-row button { font-size: 16px; font-weight: 700; padding: 14px 18px; }
 
+/* ---- trade modal (docs/plans/TRADING.md §8.2): review OR compose an offer.
+   Above toasts (70) and the options gear (60), below the boot overlay (90). ---- */
+#trade-modal {
+  position: absolute;
+  inset: 0;
+  z-index: 85;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 10px;
+}
+#trade-modal[hidden] { display: none; }
+#trade-review[hidden], #trade-edit[hidden] { display: none; }
+.trade-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 18px 22px;
+  width: min(440px, 94%);
+  max-height: 86%;
+  overflow: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+}
+.trade-card h2 { margin: 0 0 10px; }
+.trade-head { margin: 12px 0 6px; color: var(--dim); font-size: 13px; }
+.trade-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 20px;
+}
+.trade-list li {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 13px;
+}
+.trade-list.removable li { cursor: pointer; }
+.trade-list.removable li:hover { border-color: var(--accent); text-decoration: line-through; }
+.trade-list li:empty { display: none; }
+.trade-picks { display: flex; flex-wrap: wrap; gap: 6px; }
+.trade-picks button {
+  font-size: 13px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  opacity: 0.75;
+}
+.trade-picks button.sel {
+  opacity: 1;
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+.trade-add { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: 6px 0; }
+.trade-add input { width: 90px; }
+.trade-actions { display: flex; gap: 10px; justify-content: center; margin-top: 16px; flex-wrap: wrap; }
+
 .panel {
   background: var(--panel);
   border: 1px solid var(--line);

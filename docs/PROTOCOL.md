@@ -105,6 +105,7 @@ record self-delimiting). Types `0x01–0x7F` flow game→host, `0x80–0xFF` hos
 | 0x86 | `ASSIGN` | slot u8 — server-assigned player slot (bridge also writes `playerSlot` in the header) |
 | 0x90 | `BATTLE_CMD` | sub u8, then: sub 1=START {seed u32, playerCount u8, order[4] u8, mode u8}; sub 2=TURN_INPUT {turn u8, fromSlot u8, action u8, moveSlot u8, target u8, extra u16}; sub 3=END {result u8}; sub 4=PARTY {count u8, count × 32-byte wire mons} — sent *before* START; the ROM stages it and injects at START (co-op), restoring the original party at END |
 | 0x91 | `ADMIN` | sub u8, then per-sub fields (§1.6) — console/server-initiated actions applied to the local game |
+| 0x92 | `TRADE_DELIVER` | one 32-byte wire mon (§1.5) received in an accepted trade. Enqueued on receipt (`net_trade.c`) and applied on a safe overworld frame via `GiveMonToPlayer` — party, or the first free PC box slot when the party is full |
 
 ### 1.5 Wire mon (32 bytes, little-endian)
 
@@ -144,6 +145,7 @@ one TLV. Normative C handler: `NetOnAdminCmd` in `rom/overlay/src/net_admin.c`.
 | 6 | `WILD_BATTLE` | species u16, level u8 | scripted wild battle; only fires from a quiet overworld frame |
 | 7 | `RESET_TRAINER` | trainerId u16 | clear the trainer's defeated flag (rewards stay awarded) |
 | 8 | `SET_NAME` | up to 8 charmap bytes, EOS(0xFF)-padded | write the player's registered name into the save (server encodes ASCII → game charset) |
+| 9 | `TAKE_MON` | partySlot u8, species u16 | trade give-away: remove that party mon — only if the slot still holds the validated species — then compact the party and re-report it |
 ### 1.7 Freeze-free saves (SAVEBLOCKS → `save.blocks` → forge)
 
 A real flash save halts the game ~2s (emulated flash handshakes), but the
@@ -194,6 +196,9 @@ Every message has `t` (type). Server assigns each connection an integer `slot`
 | `pvp` | `to` slot | challenge player `to` |
 | `pvp.accept` | `from` slot | accept a challenge |
 | `trade.give` | `to` slot, `item` int, `qty` int | hand items to a nearby player (server relays `take_item`/`give_item` admin msgs) |
+| `trade.offer` | `to` slot, `give` terms, `want` terms | propose a trade to any ONLINE player, unlimited distance. Terms = `{items:[{id,qty}], mons:[…]}`; `give.mons` entries are the proposer's own party `{slot, sp}` (species snapshot re-verified at accept), `want.mons` entries are blind species requests `{sp}` resolved against the acceptor's party at accept. Caps: ≤8 items and ≤6 mons per side; the giver must keep ≥1 party mon. A newer offer from the same proposer supersedes the previous one. Offers expire after 120 s |
+| `trade.accept` | `from` slot | accept the pending offer from `from`. The server re-validates BOTH sides against the parties as they are now, then executes: per mon, `take_mon` to the giver (descending slot order — the ROM compacts after each removal) + `trade.deliver` to the taker; per item, `take_item`/`give_item`. Both ends get `trade.done`. Item legs are optimistic (no bag tracking server-side) — equivalent in the friends-trust model to `/give` |
+| `trade.reject` | `from` slot | decline the pending offer (proposer gets `trade.cancelled`). A counter-offer is exactly reject followed by a fresh reverse `trade.offer` |
 | `starter` | `species` int (252/255/258) | new-player kit: chosen starter lv5 + 5 Poké Balls + 3 Potions (once per connection) |
 | `cmd` | `line` string (≤200 chars) | console command (see `/help`); server replies `cmd.result` |
 | `resync` | — | fresh save requests the world flags/vars + identity again (reply: `sync` + `admin set_name`); sent by the ROM right after the multiplayer quick start |
@@ -217,8 +222,12 @@ Every message has `t` (type). Server assigns each connection an integer `slot`
 | `warp` | `g,n,x,y` | teleport instruction (accepted tp / pvp / whiteout / `/warp`) |
 | `pvp.req` | `from` slot, `name` | incoming challenge |
 | `tp.req` | `from` slot, `name` | player `from` asks to teleport to you; reply `tp.accept` to allow it |
-| `admin` | `sub` string + per-sub fields | apply an admin action to your game; the bridge encodes it as ADMIN TLV §1.6 (`sub` strings: `give_item`, `take_item`, `give_mon`, `set_level`, `give_xp`, `wild_battle`, `reset_trainer`) |
+| `admin` | `sub` string + per-sub fields | apply an admin action to your game; the bridge encodes it as ADMIN TLV §1.6 (`sub` strings: `give_item`, `take_item`, `give_mon`, `set_level`, `give_xp`, `wild_battle`, `reset_trainer`, `set_name`, `take_mon`) |
 | `trade.recv` | `from` slot, `name`, `item`, `qty` | someone handed you items (UI notice; the bag change arrives via `admin`) |
+| `trade.req` | `from` slot, `name`, `give` terms, `want` terms | player `from` offered you a trade — the UI shows "«name» has offered a trade" and opens the trade GUI (accept / counter-offer / reject) |
+| `trade.deliver` | `from` slot, `b` [32 ints] | one traded-in wire mon (§1.5); the bridge forwards it as TRADE_DELIVER TLV 0x92 (party, or PC when full) |
+| `trade.cancelled` | `from` slot, `reason` | your pending offer to `from` was rejected / they went offline |
+| `trade.done` | `ok` bool, `with` slot, `summary?`/`msg?` | trade executed (summary) or failed validation (why); sent to both ends |
 | `cmd.result` | `ok` bool, `msg` string | console command reply |
 | `sync` | `flags` [int], `vars` [[id,v]] | world-state replay outside `welcome` (answers `resync` — new-game init wiped what the welcome applied) |
 | `speed` | `x` int 1–4 | authoritative shared speed; every bridge applies it to its emulator |

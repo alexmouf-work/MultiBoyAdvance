@@ -51,6 +51,9 @@ enum {
     NET_MSG_ASSIGN = 0x86,     // slot u8
     NET_MSG_BATTLE_CMD = 0x90, // sub u8: 1=start{seed u32,count u8,order[4],mode u8} 2=input 3=end{result u8}
     NET_MSG_ADMIN = 0x91,      // sub u8 (NET_ADMIN_*), payload per sub
+    NET_MSG_TRADE_DELIVER = 0x92, // one 32-byte wire mon (§1.5) received in a trade;
+                                  // applied on a safe overworld frame via GiveMonToPlayer
+                                  // (party, or the PC when the party is full)
 };
 
 // NET_MSG_ADMIN subcommands (console/terminal actions; docs/PROTOCOL.md §1.6)
@@ -63,6 +66,8 @@ enum {
     NET_ADMIN_WILD_BATTLE = 6,   // species u16, level u8
     NET_ADMIN_RESET_TRAINER = 7, // trainerId u16 (clears the defeated flag only)
     NET_ADMIN_SET_NAME = 8,      // up to 8 charmap bytes (EOS-padded) — player name
+    NET_ADMIN_TAKE_MON = 9,      // partySlot u8, species u16 — trade give-away:
+                                 // removes that party mon (species verified first)
 };
 
 // NET_MSG_REQUEST subcommands (game → host)

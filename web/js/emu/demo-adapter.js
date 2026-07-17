@@ -27,6 +27,13 @@ export class DemoAdapter {
   ghosts = new Map(); // slot -> {x,y,f,s,g,n}
   battle = null; // {seed, order, mode} once started
   events = []; // human-readable log the page can read (and e2e can assert on)
+  // A fake but plausible party so co-op merges and trades have something to
+  // chew on. Mutable: trades (take_mon / TRADE_DELIVER) really change it.
+  party = [
+    { sp: 252, lv: 34, hp: 100 }, // Treecko line
+    { sp: 261, lv: 28, hp: 100 },
+    { sp: 263, lv: 21, hp: 90 },
+  ];
 
   async init(canvas) {
     canvas.width = COLS * TILE;
@@ -146,10 +153,27 @@ export class DemoAdapter {
         case T.FLAG_APPLY:
           this.events.push({ t: 'flag.applied', id: dec.flag(payload).id });
           break;
-        case T.ADMIN:
-          // The real game applies these (net_admin.c); the demo just logs.
-          this.events.push({ t: 'admin', ...dec.admin(payload) });
+        case T.ADMIN: {
+          // The real game applies these (net_admin.c); the demo logs them and
+          // mirrors the party-mutating ones so trades are e2e-observable.
+          const a = dec.admin(payload);
+          this.events.push({ t: 'admin', ...a });
+          if (a.sub === 'take_mon' && this.party[a.slot]?.sp === a.sp) {
+            this.party.splice(a.slot, 1); // net_admin.c compacts the same way
+            this._outParty();
+          }
           break;
+        }
+        case T.TRADE_DELIVER: {
+          // net_trade.c: GiveMonToPlayer (party, or PC when full). The demo
+          // party has no PC; a 7th mon just logs as boxed.
+          const d = dec.tradeDeliver(payload);
+          const boxed = this.party.length >= 6; // full party -> "sent to the PC"
+          if (!boxed) this.party.push({ sp: d.sp, lv: d.lv, hp: 100 });
+          this.events.push({ t: 'trade.deliver', sp: d.sp, lv: d.lv, boxed });
+          this._outParty();
+          break;
+        }
         case T.BATTLE_CMD: {
           const c = dec.battleCmd(payload);
           if (c.sub === 'start') {
@@ -186,15 +210,10 @@ export class DemoAdapter {
   }
 
   _outParty() {
-    // A fake but plausible party so co-op merges have something to chew on.
-    const party = [
-      { sp: 252, lv: 34, hp: 100 }, // Treecko line
-      { sp: 261, lv: 28, hp: 100 },
-      { sp: 263, lv: 21, hp: 90 },
-    ];
-    this._out(T.PARTY_SUMMARY, enc.partySummary(party));
-    // Matching synthetic wire mons (§1.5) so battle.start carries partyWire.
-    const wire = party.map((m, i) => {
+    this._out(T.PARTY_SUMMARY, enc.partySummary(this.party));
+    // Matching synthetic wire mons (§1.5) so battle.start carries partyWire
+    // and the server's trade validation sees real species bytes.
+    const wire = this.party.map((m, i) => {
       const b = new Array(32).fill(0);
       b[0] = 0x40 + i; // personality
       b[4] = 0x77; // otId

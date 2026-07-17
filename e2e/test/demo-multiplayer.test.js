@@ -132,6 +132,75 @@ test('mobile: speed control stays reachable + its menu never strands open', asyn
   await page._ctx.close();
 });
 
+test('trading: offer → counter-offer → accept moves Pokémon both ways', async () => {
+  const tia = await joinAsDemo('Tia');
+  const ubo = await joinAsDemo('Ubo');
+  const uboSlot = await ubo.evaluate(() => window.mba.ui.slot);
+  const tiaSlot = await tia.evaluate(() => window.mba.ui.slot);
+
+  // Wait for both parties to reach the server (PARTY_FULL report).
+  for (const page of [tia, ubo]) {
+    await page.waitForFunction(() => window.mba.ui.myParty?.length === 3, null, { timeout: 5000 });
+  }
+
+  // Tia composes an offer from the roster: her slot-0 mon (sp 252) for Ubo's 261.
+  await tia.click(`#players li[data-slot="${uboSlot}"] button[data-action="trade"]`);
+  await tia.waitForSelector('#trade-edit:not([hidden])', { timeout: 5000 });
+  await tia.click('#trade-give-mons button[data-idx="0"]');
+  await tia.fill('#trade-want-species', '261');
+  await tia.click('#trade-add-want-mon');
+  await tia.click('#trade-send');
+
+  // Ubo gets the toast, opens the review, and COUNTERS. The editor must open
+  // pre-filled with the swapped terms: his 261 preselected, wanting her 252.
+  await ubo.waitForSelector('.offer button[data-action="trade-open"]', { timeout: 5000 });
+  await ubo.click('.offer button[data-action="trade-open"]');
+  await ubo.waitForSelector('#trade-review:not([hidden])', { timeout: 5000 });
+  await ubo.click('#trade-counter');
+  await ubo.waitForSelector('#trade-edit:not([hidden])', { timeout: 5000 });
+  const prefill = await ubo.evaluate(() => ({
+    sel: [...document.querySelectorAll('#trade-give-mons button.sel')].map((b) => b.textContent),
+    want: [...document.querySelectorAll('#trade-want-edit li')].map((li) => li.textContent),
+  }));
+  assert.deepEqual(prefill.sel, ['#261 lv28'], 'counter preselects the mon they asked for');
+  assert.deepEqual(prefill.want, ['Pokémon #252'], 'counter requests what they offered');
+  // Tia hears the rejection that a counter implies.
+  await tia.waitForFunction(
+    () => [...document.querySelectorAll('#log li')].some((li) => /cancelled/.test(li.textContent)),
+    null, { timeout: 5000 },
+  );
+  await ubo.click('#trade-send');
+
+  // Tia reviews the counter and accepts.
+  await tia.waitForSelector('.offer button[data-action="trade-open"]', { timeout: 5000 });
+  await tia.click('.offer button[data-action="trade-open"]');
+  await tia.waitForSelector('#trade-review:not([hidden])', { timeout: 5000 });
+  await tia.click('#trade-accept');
+
+  // Both games applied the legs: Ubo's 261 → Tia, Tia's 252 → Ubo.
+  await tia.waitForFunction(
+    () => window.mba.adapter.events.some((e) => e.t === 'trade.deliver' && e.sp === 261),
+    null, { timeout: 5000 },
+  );
+  await ubo.waitForFunction(
+    () => window.mba.adapter.events.some((e) => e.t === 'trade.deliver' && e.sp === 252),
+    null, { timeout: 5000 },
+  );
+  const tiaParty = await tia.evaluate(() => window.mba.adapter.party.map((m) => m.sp));
+  const uboParty = await ubo.evaluate(() => window.mba.adapter.party.map((m) => m.sp));
+  assert.deepEqual(tiaParty, [261, 263, 261], 'Tia lost her 252, gained a 261');
+  assert.deepEqual(uboParty, [252, 263, 252], 'Ubo lost his 261, gained a 252');
+  for (const page of [tia, ubo]) {
+    await page.waitForFunction(
+      () => [...document.querySelectorAll('#log li')].some((li) => /trade complete/.test(li.textContent)),
+      null, { timeout: 5000 },
+    );
+  }
+
+  await tia.close();
+  await ubo.close();
+});
+
 test('two browsers share one world end-to-end', async () => {
   const ann = await joinAsDemo('Ann');
   const ben = await joinAsDemo('Ben');

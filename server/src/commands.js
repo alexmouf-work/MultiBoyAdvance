@@ -11,6 +11,8 @@ const HELP = [
   '/battle <player> wild <speciesId> [level] — start a wild battle on their screen',
   '/resettrainer <player> <trainerId> — un-defeat an NPC trainer (rewards keep)',
   '/tp <player> — request to teleport to them (they accept)',
+  '/trade <player> give <slot 1-6> [for <speciesId>] — offer a party Pokémon',
+  '/trade <player> accept|reject — answer their pending trade offer',
   '/warp <group> <map> <x> <y> — warp yourself to map coordinates',
   '/delete <name> — remove an offline trainer from the registry',
   '/resetlocal — (browser) wipe this device\'s local data and reload',
@@ -116,6 +118,31 @@ export function runCommand(world, me, line) {
       if (!target || target === me) return { ok: false, msg: 'usage: /tp <player>' };
       world.requestTeleport(me, target);
       return { ok: true, msg: `teleport request sent to ${target.name}` };
+    }
+
+    case '/trade': {
+      // No-GUI path (desktop mGBA + e2e): a one-mon offer, and answers.
+      const usage = 'usage: /trade <player> give <slot 1-6> [for <speciesId>] · /trade <player> accept|reject';
+      const target = findTarget(world, me, a[0]);
+      if (!target || target === me) return { ok: false, msg: usage };
+      if (a[1] === 'accept' || a[1] === 'reject') {
+        world.handle(me, { t: `trade.${a[1]}`, from: target.slot });
+        return { ok: true, msg: `trade ${a[1] === 'accept' ? 'accepted' : 'rejected'}` };
+      }
+      if (a[1] !== 'give') return { ok: false, msg: usage };
+      const slot = int(a[2], 1, 6);
+      if (slot === null) return { ok: false, msg: usage };
+      const mon = me.fullMons[slot - 1];
+      if (!mon) return { ok: false, msg: `you have no Pokémon in slot ${slot}` };
+      const wantSp = a[3] === 'for' ? int(a[4], 1, 0xffff) : null;
+      if (a[3] === 'for' && wantSp === null) return { ok: false, msg: usage };
+      world.handle(me, {
+        t: 'trade.offer',
+        to: target.slot,
+        give: { mons: [{ slot: slot - 1, sp: mon.b[8] | (mon.b[9] << 8) }] },
+        want: wantSp ? { mons: [{ sp: wantSp }] } : {},
+      });
+      return { ok: true, msg: `trade offer sent to ${target.name}` };
     }
 
     case '/warp': {
