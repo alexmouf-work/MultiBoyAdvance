@@ -57,5 +57,6 @@ acceptance test passes.
   (the server has one world; run two servers for two worlds).
 - Cartridge-accurate battle validation server-side (Showdown is not
   bug-for-bug Gen-3; see RESEARCH.md — the ROM engine is the authority).
-- Trading UI (Quetzal-style trade flows can ride the battle-session machinery
-  later).
+- ~~Trading UI~~ — now planned in detail: see `docs/plans/TRADING.md`. Team/co-op
+  battles (completing Phase 3 with the owner's turn-alternation + team-builder GUI)
+  are planned in `docs/plans/TEAM-BATTLES.md`.
