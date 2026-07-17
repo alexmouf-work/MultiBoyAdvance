@@ -48,6 +48,11 @@ async function joinAsDemo(name) {
   await page.goto(`${baseUrl}/?demo=1`); // demo is a dev-only harness now
   await page.fill('#name', name);
   await page.click('#btn-demo');
+  // The login screen must actually hide (it has display:flex, which overrides
+  // the [hidden] UA rule unless we restore it). offsetParent === null means it
+  // is genuinely display:none, not merely covered by the game.
+  await page.waitForFunction(() => document.querySelector('#login')?.offsetParent === null,
+    null, { timeout: 5000 });
   await page.waitForSelector('#chip-server.ok', { timeout: 5000 });
   await page.waitForFunction(() => window.mba?.ui?.slot !== null, null, { timeout: 5000 });
   return page;
@@ -189,6 +194,11 @@ test('two browsers share one world end-to-end', async () => {
   await ben.press('#console-in', 'Enter');
   await ben.waitForSelector('#login:not([hidden])', { timeout: 10_000 });
   assert.equal(await ben.evaluate(() => localStorage.length), 0, 'localStorage wiped');
+
+  // --- logout button returns to the start screen ---
+  ann.on('dialog', (d) => d.accept());
+  await ann.click('#btn-logout');
+  await ann.waitForSelector('#login:not([hidden])', { timeout: 10_000 });
 
   await ann.close();
   await ben.close();

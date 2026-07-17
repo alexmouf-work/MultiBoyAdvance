@@ -165,12 +165,29 @@ function makeSaveSync(adapter, name, ui) {
   };
 }
 
+// ---- boot progress overlay ---------------------------------------------------
+
+function showLoading(msg) {
+  $('#loading').hidden = false;
+  $('#loading-msg').textContent = msg;
+  $('#loading-msg').classList.remove('err');
+  $('#loading-back').hidden = true;
+}
+function hideLoading() {
+  $('#loading').hidden = true;
+}
+function loadingError(msg) {
+  $('#loading').hidden = false;
+  const el = $('#loading-msg');
+  el.textContent = msg;
+  el.classList.add('err');
+  $('#loading .spinner').style.display = 'none';
+  $('#loading-back').hidden = false;
+}
+
 // ---- game boot ---------------------------------------------------------------
 
 async function start(mode, romFile = null) {
-  $('#login').hidden = true;
-  $('#stage').hidden = false;
-
   let adapter;
   if (mode === 'demo') {
     adapter = new DemoAdapter();
@@ -186,22 +203,28 @@ async function start(mode, romFile = null) {
   window.mba = { adapter, socket, bridge, ui }; // console + e2e access
   window.mbaMailbox = mailbox;
 
-  bridge.onStatus = (s) =>
+  bridge.onStatus = (s) => {
     ui.setStatus('#chip-mailbox', `mailbox: ${s}`, s === 'attached' || s === 'game-ready');
+    // The game is visibly live once the bridge attaches — drop the overlay.
+    if (s === 'attached' || s === 'game-ready') hideLoading();
+  };
   ui.setStatus('#chip-mode', mode === 'demo' ? 'demo mode' : 'mGBA', true);
 
   try {
+    showLoading('Starting the emulator…');
     await adapter.init($('#screen'));
   } catch (err) {
     ui.log('error', String(err.message ?? err));
     ui.setStatus('#chip-mode', 'failed to start', false);
+    loadingError(String(err.message ?? err));
     return;
   }
   const playerName = $('#name').value.trim() || 'Player';
   if (romFile) {
     try {
       if (mode !== 'demo') await verifyRom(romFile, ui);
-      if (mode !== 'demo') await restoreSave(adapter, playerName, ui);
+      if (mode !== 'demo') { showLoading('Loading your progress…'); await restoreSave(adapter, playerName, ui); }
+      showLoading('Booting the game…');
       await adapter.loadROM(romFile);
       ui.log('rom', `loaded ${romFile.name}`);
       // Watchdog: a healthy netcode ROM plants its mailbox within seconds of
@@ -234,6 +257,7 @@ async function start(mode, romFile = null) {
   // mirrored to IndexedDB and the server.
   bridge.onSaved = makeSaveSync(adapter, playerName, ui);
 
+  showLoading('Connecting to the world…');
   socket.connect({ name: $('#name').value || undefined });
 
   wireGameControls(adapter, socket, ui);
@@ -241,7 +265,11 @@ async function start(mode, romFile = null) {
   if (mode === 'demo') {
     $('#demo-controls').hidden = false;
     $('#btn-end-battle').onclick = () => adapter.endBattle(1);
+    hideLoading(); // demo has no real mailbox to attach — reveal immediately
   }
+  // Fallback: if the mailbox never reports (e.g. a stall), don't trap the
+  // player behind the overlay forever — the Debug panel surfaces the problem.
+  setTimeout(hideLoading, 25_000);
 }
 
 // ---- fullscreen / speed / touch / prefs ------------------------------------------
@@ -326,11 +354,35 @@ function wireGameControls(adapter, socket, ui) {
   base.addEventListener('pointerup', stickEnd);
   base.addEventListener('pointercancel', stickEnd);
 
+  // ---- immersive UI (fullscreen OR mobile overlay): the pad prefs + logout
+  // live in the pop-out OPTIONS panel so they're reachable without a controls
+  // bar; outside immersive they sit in the bar below the game. ----
+  const optionsPanel = $('#options-panel');
+  const padPrefs = $('#pad-prefs');
+  const controlsBar = $('#controls-bar');
+  const logoutBtn = $('#btn-logout');
+  const inFullscreen = () =>
+    Boolean(document.fullscreenElement) || wrap.classList.contains('fake-fullscreen');
+  const immersive = () => inFullscreen() || wrap.classList.contains('mobile-overlay');
+  const syncImmersiveUi = () => {
+    if (immersive()) {
+      optionsPanel.append(padPrefs, logoutBtn);
+    } else {
+      controlsBar.append(logoutBtn, padPrefs);
+      optionsPanel.classList.remove('open');
+    }
+  };
+
   // ---- control preferences: size slider, pad placement, stick toggle ----
+  const isTouch = () => document.body.classList.contains('touch');
   const applyScale = (pct) => touch.style.setProperty('--ps', String(pct / 100));
   const applyMode = (mode) => {
     wrap.classList.toggle('controls-below', mode === 'below');
+    // On phones, overlay mode is an immersive landscape view (game rotated to
+    // fill the screen, controls floating on top). Below mode stays windowed.
+    wrap.classList.toggle('mobile-overlay', mode !== 'below' && isTouch());
     $('#btn-pad-mode').textContent = mode === 'below' ? 'Pads: below' : 'Pads: overlay';
+    syncImmersiveUi();
   };
   const applyStick = (stick) => {
     $('#joystick').hidden = stick !== 'stick';
@@ -361,8 +413,6 @@ function wireGameControls(adapter, socket, ui) {
   };
 
   // ---- fullscreen (+ keyboard mapping while in it) ----
-  const inFullscreen = () =>
-    Boolean(document.fullscreenElement) || wrap.classList.contains('fake-fullscreen');
   $('#btn-fullscreen').onclick = async () => {
     document.body.classList.add('touch'); // controls are wanted in fullscreen
     try {
@@ -393,26 +443,15 @@ function wireGameControls(adapter, socket, ui) {
   window.addEventListener('keydown', fsKey(true), true);
   window.addEventListener('keyup', fsKey(false), true);
 
-  // ---- fullscreen options panel: the real controls move in and out, so
-  // there's a single source of truth for their state and labels ----
-  const optionsPanel = $('#options-panel');
-  const padPrefs = $('#pad-prefs');
-  const controlsBar = $('#controls-bar');
-  const syncFullscreenUi = () => {
-    if (inFullscreen()) {
-      optionsPanel.append(padPrefs);
-    } else {
-      controlsBar.append(padPrefs);
-      optionsPanel.classList.remove('open');
-    }
-  };
+  // ---- OPTIONS panel open/close + keep it synced with immersive state ----
   $('#btn-options').onclick = (e) => {
     e.stopPropagation();
     optionsPanel.classList.toggle('open');
   };
-  document.addEventListener('fullscreenchange', syncFullscreenUi);
-  const fsObserver = new MutationObserver(syncFullscreenUi);
+  document.addEventListener('fullscreenchange', syncImmersiveUi);
+  const fsObserver = new MutationObserver(syncImmersiveUi);
   fsObserver.observe(wrap, { attributes: true, attributeFilter: ['class'] });
+  syncImmersiveUi(); // initial placement (applyMode ran before this wiring)
 
   // ---- sidebar drawer ----
   const sidebar = $('#sidebar');
@@ -446,22 +485,40 @@ function wireGameControls(adapter, socket, ui) {
 
 async function joinNow(name = null) {
   if (name) $('#name').value = name;
-  $('#btn-join').disabled = true;
-  $('#btn-join').textContent = 'Loading…';
+  // Move straight to the stage with a progress overlay — no button left
+  // spinning on the login screen while a multi-MB ROM downloads.
+  $('#login').hidden = true;
+  $('#stage').hidden = false;
+  showLoading('Downloading the game…');
   try {
     await start('mgba', await fetchRomFile());
   } catch (err) {
-    $('#btn-join').disabled = !joinReady;
-    $('#btn-join').textContent = 'Join the game';
-    $('#rom-status').textContent = String(err.message ?? err);
+    loadingError(String(err.message ?? err));
   }
 }
 
 $('#btn-join').onclick = () => joinNow();
-$('#btn-demo').onclick = () => start('demo');
-$('#rom').onchange = (e) => {
+$('#btn-demo').onclick = async () => {
+  $('#login').hidden = true;
+  $('#stage').hidden = false;
+  showLoading('Starting demo…');
+  await start('demo');
+};
+$('#rom').onchange = async (e) => {
   const file = e.target.files?.[0];
-  if (file) start('mgba', file);
+  if (!file) return;
+  $('#login').hidden = true;
+  $('#stage').hidden = false;
+  showLoading('Booting the game…');
+  await start('mgba', file);
+};
+
+// Logout / back-to-start: a full reload is the clean teardown (emulator core,
+// socket, save sync all reset). Progress is already saved server-side.
+const goHome = () => location.reload();
+$('#loading-back').onclick = goHome;
+$('#btn-logout').onclick = () => {
+  if (confirm('Return to the start screen? Your progress is saved.')) goHome();
 };
 
 initJoinScreen();

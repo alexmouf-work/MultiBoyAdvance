@@ -69,6 +69,14 @@
 
   <!-- ============ game screen ============ -->
   <section id="stage" hidden>
+    <!-- boot progress: covers the stage while the ROM downloads + the emulator
+         starts, so the join flow never looks frozen -->
+    <div id="loading" hidden>
+      <div class="spinner"></div>
+      <p id="loading-msg">Loading…</p>
+      <button id="loading-back" class="ghost" hidden>← Back to start</button>
+    </div>
+
     <div id="main">
     <h1 id="title">MultiBoyAdvance</h1>
 
@@ -137,6 +145,7 @@
 
     <div id="controls-bar">
       <button id="btn-fullscreen" title="Fullscreen">⛶ Fullscreen</button>
+      <button id="btn-logout" title="Return to the start screen">⎋ Logout</button>
       <div id="pad-prefs">
         <div id="speed-ctl">
           <button id="btn-speed" title="Game speed (shared by all players)">⚡ 1×</button>

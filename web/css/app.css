@@ -50,6 +50,9 @@ h3 { margin: 0 0 6px; font-size: 12px; color: var(--dim); text-transform: upperc
   padding: 8vh 16px 40px;
   text-align: center;
 }
+/* author display:flex beats the [hidden] UA rule — restore it, or the login
+   stays behind the game (it was only ever *covered* by the fixed overlay) */
+#login[hidden] { display: none; }
 .hero {
   margin: 0;
   font-size: clamp(40px, 8vw, 72px);
@@ -409,6 +412,35 @@ button.ghost { background: transparent; }
 #debug-log li { padding: 2px 0; border-bottom: 1px solid var(--line); color: var(--dim); }
 #debug-log li[data-warn] { color: var(--warn); font-weight: 700; }
 
+/* ============ boot progress overlay ============ */
+#loading {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 24px;
+  text-align: center;
+  background: radial-gradient(1200px 600px at 50% -100px, #14203c 0%, var(--bg) 60%);
+}
+#loading[hidden] { display: none; }
+#loading .spinner {
+  width: 46px;
+  height: 46px;
+  border: 4px solid var(--line);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: mba-spin 0.9s linear infinite;
+}
+@keyframes mba-spin { to { transform: rotate(360deg); } }
+#loading-msg { margin: 0; font-size: 16px; color: var(--text); max-width: 90%; }
+#loading-msg.err { color: var(--warn); }
+
+#btn-logout { color: var(--dim); }
+
 /* ============ touch controls ============ */
 /* --ps scales every pad dimension (the "Size" slider writes it). */
 #touch {
@@ -446,16 +478,31 @@ body.touch #gamewrap:not(.controls-below) #stick-base {
   padding: 0;
   line-height: 1;
   border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.55);
-  background: rgba(13, 17, 23, 0.78);
+  /* thick high-contrast bevel: bright rim, deep body, sculpted highlight +
+     shadow so the controls read clearly over the game */
+  border: 4px solid rgba(255, 255, 255, 0.92);
+  background: rgba(6, 9, 14, 0.94);
   color: #fff;
-  font-weight: 700;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+  box-shadow:
+    0 4px 10px rgba(0, 0, 0, 0.75),
+    inset 0 3px 4px rgba(255, 255, 255, 0.35),
+    inset 0 -5px 7px rgba(0, 0, 0, 0.6);
   user-select: none;
   -webkit-user-select: none;
   touch-action: none;
 }
-.pad:active, .pad.held { background: var(--accent); border-color: var(--accent); }
+.pad:active, .pad.held {
+  background: var(--accent);
+  border-color: #fff;
+  /* pressed-in bevel */
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.6),
+    inset 0 4px 8px rgba(0, 0, 0, 0.55),
+    inset 0 -2px 3px rgba(255, 255, 255, 0.25);
+}
 
 /* left: L above the movement control; right: R above the action diamond */
 #left-cluster, #right-cluster {
@@ -500,8 +547,11 @@ body.touch #gamewrap:not(.controls-below) #stick-base {
   width: calc(150px * var(--ps));
   height: calc(150px * var(--ps));
   border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.55);
-  background: rgba(13, 17, 23, 0.6);
+  border: 4px solid rgba(255, 255, 255, 0.92);
+  background: rgba(6, 9, 14, 0.9);
+  box-shadow:
+    0 4px 10px rgba(0, 0, 0, 0.75),
+    inset 0 4px 8px rgba(0, 0, 0, 0.6);
   touch-action: none;
 }
 #stick-knob {
@@ -512,8 +562,11 @@ body.touch #gamewrap:not(.controls-below) #stick-base {
   height: calc(62px * var(--ps));
   margin: calc(-31px * var(--ps)) 0 0 calc(-31px * var(--ps));
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.35);
-  border: 2px solid rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.5);
+  border: 4px solid rgba(255, 255, 255, 0.92);
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.7),
+    inset 0 2px 3px rgba(255, 255, 255, 0.4);
 }
 #stick-base.live #stick-knob { background: var(--accent); }
 
@@ -541,9 +594,11 @@ body.touch #gamewrap:not(.controls-below) #stick-base {
 #gamewrap.controls-below #left-cluster,
 #gamewrap.controls-below #right-cluster { position: static; }
 
-/* ---- fullscreen options button + panel (hidden outside fullscreen) ---- */
+/* ---- OPTIONS button + panel (shown in immersive modes: fullscreen or the
+   mobile landscape overlay; hidden in the windowed/below layout) ---- */
 #btn-options, #options-panel { display: none; }
-#gamewrap:fullscreen #btn-options, #gamewrap.fake-fullscreen #btn-options {
+#gamewrap:fullscreen #btn-options, #gamewrap.fake-fullscreen #btn-options,
+#gamewrap.mobile-overlay #btn-options {
   display: block;
   position: absolute;
   top: 14px;
@@ -551,7 +606,8 @@ body.touch #gamewrap:not(.controls-below) #stick-base {
   z-index: 60;
   background: rgba(22, 27, 34, 0.85);
 }
-#gamewrap:fullscreen #options-panel.open, #gamewrap.fake-fullscreen #options-panel.open {
+#gamewrap:fullscreen #options-panel.open, #gamewrap.fake-fullscreen #options-panel.open,
+#gamewrap.mobile-overlay #options-panel.open {
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -559,12 +615,15 @@ body.touch #gamewrap:not(.controls-below) #stick-base {
   top: 60px;
   right: 16px;
   z-index: 60;
-  background: rgba(22, 27, 34, 0.95);
+  max-height: 80%;
+  overflow: auto;
+  background: rgba(22, 27, 34, 0.97);
   border: 1px solid var(--line);
   border-radius: 12px;
   padding: 14px;
   backdrop-filter: blur(8px);
 }
+#options-panel #btn-logout { width: 100%; }
 #options-panel #pad-prefs { flex-direction: column; align-items: stretch; }
 #options-panel #pad-prefs > * { width: 100%; }
 /* the panel sits near the top of the screen, so the speed selector must open
@@ -638,4 +697,75 @@ body.touch #gamewrap:not(.controls-below) #stick-base {
   font-size: 12px;
   padding: 6px 10px;
   color: var(--dim);
+}
+
+/* ============ mobile layouts ============ */
+/* Overlay mode on a phone = immersive: the game fills the whole screen and the
+   pads float on top. In portrait we rotate the frame 90° so the landscape game
+   is large (tilt the phone into landscape to play). Below mode stays windowed. */
+body.touch #gamewrap.mobile-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  max-width: none;
+  margin: 0;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+body.touch #gamewrap.mobile-overlay #screen {
+  width: min(100vw, 150vh);
+  border: none;
+  border-radius: 0;
+}
+body.touch #gamewrap.mobile-overlay #touch {
+  position: absolute;
+  inset: 0;
+  max-width: none;
+  min-height: 0;
+  pointer-events: none;
+  z-index: 20;
+}
+body.touch #gamewrap.mobile-overlay .pad,
+body.touch #gamewrap.mobile-overlay #stick-base { pointer-events: auto; }
+body.touch #gamewrap.mobile-overlay #left-cluster { left: 20px; bottom: 20px; }
+body.touch #gamewrap.mobile-overlay #right-cluster { right: 20px; bottom: 20px; }
+
+@media (orientation: portrait) {
+  /* rotate the immersive frame into landscape and fill the viewport */
+  body.touch #gamewrap.mobile-overlay {
+    inset: auto;
+    top: 0;
+    left: 0;
+    width: 100vh;
+    height: 100vw;
+    transform-origin: top left;
+    transform: translateX(100vw) rotate(90deg);
+  }
+  body.touch #gamewrap.mobile-overlay #screen {
+    width: min(100vh, 150vw);
+  }
+
+  /* Below mode, windowed: hide the big page title, top-align, let the game use
+     the full width with the pads packed directly beneath — no weird letterbox,
+     no stretch (the 3:2 aspect-ratio is preserved). */
+  body.touch #stage { padding: 6px 0 20px; }
+  body.touch #title { display: none; }
+  body.touch #main { gap: 8px; }
+  body.touch #gamewrap.controls-below { gap: 6px; }
+  body.touch #gamewrap.controls-below #screen { width: 100vw; border-radius: 0; }
+
+  /* Two 196px pad clusters don't fit a phone's width — scale the whole strip
+     down so nothing is cut off (the rotated overlay has room; this windowed
+     strip does not). The Size slider still scales on top of this. */
+  body.touch #gamewrap.controls-below #touch {
+    transform: scale(0.8);
+    transform-origin: top center;
+    min-height: calc(200px * var(--ps));
+  }
+}
+/* roomier portrait tablets can show the pads full size */
+@media (orientation: portrait) and (min-width: 560px) {
+  body.touch #gamewrap.controls-below #touch { transform: none; }
 }
