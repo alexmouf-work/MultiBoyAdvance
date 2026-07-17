@@ -615,8 +615,12 @@ body.touch #gamewrap:not(.controls-below) #stick-base {
 /* ---- OPTIONS button + panel (shown in immersive modes: fullscreen or the
    mobile landscape overlay; hidden in the windowed/below layout) ---- */
 #btn-options, #options-panel { display: none; }
+/* On phones, "below" mode is also a full-screen frame (the controls bar is
+   hidden behind it), so it needs the same pop-out gear/panel as overlay to
+   reach the prefs + logout. On desktop, below keeps its normal bar. */
 #gamewrap:fullscreen #btn-options, #gamewrap.fake-fullscreen #btn-options,
-#gamewrap.mobile-overlay #btn-options {
+#gamewrap.mobile-overlay #btn-options,
+body.touch #gamewrap.controls-below #btn-options {
   display: block;
   position: absolute;
   top: 14px;
@@ -625,7 +629,8 @@ body.touch #gamewrap:not(.controls-below) #stick-base {
   background: rgba(22, 27, 34, 0.85);
 }
 #gamewrap:fullscreen #options-panel.open, #gamewrap.fake-fullscreen #options-panel.open,
-#gamewrap.mobile-overlay #options-panel.open {
+#gamewrap.mobile-overlay #options-panel.open,
+body.touch #gamewrap.controls-below #options-panel.open {
   display: flex;
   flex-direction: column;
   gap: 12px;

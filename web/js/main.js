@@ -361,10 +361,23 @@ function wireGameControls(adapter, socket, ui) {
   const padPrefs = $('#pad-prefs');
   const controlsBar = $('#controls-bar');
   const logoutBtn = $('#btn-logout');
+  const speedMenu = $('#speed-menu');
+  const closeSpeedMenu = () => { speedMenu.hidden = true; };
   const inFullscreen = () =>
     Boolean(document.fullscreenElement) || wrap.classList.contains('fake-fullscreen');
-  const immersive = () => inFullscreen() || wrap.classList.contains('mobile-overlay');
+  // On phones BOTH pad modes fill the screen (the controls bar is hidden behind
+  // the fixed game frame), so the prefs + logout have to live in the pop-out
+  // OPTIONS panel for either mode — not just overlay. On desktop, "below" keeps
+  // the normal bar, so it's only immersive there when actually fullscreen.
+  const immersive = () =>
+    inFullscreen() ||
+    (isTouch() &&
+      (wrap.classList.contains('mobile-overlay') || wrap.classList.contains('controls-below')));
   const syncImmersiveUi = () => {
+    // A reparent or mode switch must never strand the speed selector open: its
+    // hidden state would invert the next toggle, so the button reads as dead
+    // until an unrelated outside-tap resets it (the "logout then cancel" fix).
+    closeSpeedMenu();
     if (immersive()) {
       optionsPanel.append(padPrefs, logoutBtn);
     } else {
@@ -447,6 +460,7 @@ function wireGameControls(adapter, socket, ui) {
   $('#btn-options').onclick = (e) => {
     e.stopPropagation();
     optionsPanel.classList.toggle('open');
+    closeSpeedMenu(); // the selector always starts collapsed when the panel opens/closes
   };
   document.addEventListener('fullscreenchange', syncImmersiveUi);
   const fsObserver = new MutationObserver(syncImmersiveUi);
@@ -464,8 +478,8 @@ function wireGameControls(adapter, socket, ui) {
 
   // Shared speed: a button that opens the 4-speed selector. The request goes
   // to the server; the world's answer (speed msg, also present in welcome) is
-  // what actually applies it — for everyone.
-  const speedMenu = $('#speed-menu');
+  // what actually applies it — for everyone. (speedMenu/closeSpeedMenu are
+  // declared up in the immersive block so mode switches can reset the selector.)
   $('#btn-speed').onclick = (e) => {
     e.stopPropagation();
     speedMenu.hidden = !speedMenu.hidden;

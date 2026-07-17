@@ -60,6 +60,78 @@ async function joinAsDemo(name) {
 
 const evts = (page) => page.evaluate(() => window.mba.adapter.events);
 
+// Join demo mode inside a phone-like touch context (portrait), so the mobile
+// immersive layout (fixed full-screen frame + pop-out OPTIONS panel) is active.
+async function joinAsMobile(name) {
+  const ctx = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    hasTouch: true,
+    isMobile: true,
+    deviceScaleFactor: 3,
+  });
+  const page = await ctx.newPage();
+  await page.goto(`${baseUrl}/?demo=1`);
+  await page.fill('#name', name);
+  await page.click('#btn-demo');
+  await page.waitForFunction(() => document.querySelector('#login')?.offsetParent === null,
+    null, { timeout: 8000 });
+  await page.waitForFunction(() => window.mba?.ui?.slot !== null, null, { timeout: 8000 });
+  page._ctx = ctx;
+  return page;
+}
+
+// Is the speed button actually the top element at its own center (i.e. tappable,
+// not buried behind the game frame)? Returns false when it has no box either.
+const speedReachable = (page) => page.evaluate(() => {
+  const b = document.querySelector('#btn-speed');
+  const r = b?.getBoundingClientRect();
+  if (!r || !r.width) return false;
+  const top = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+  return top === b || b.contains(top);
+});
+const speedMenuOpen = (page) =>
+  page.evaluate(() => document.querySelector('#speed-menu')?.hidden === false);
+const tapById = (page, id) => page.evaluate((i) => document.getElementById(i).click(), id);
+
+test('mobile: speed control stays reachable + its menu never strands open', async () => {
+  const page = await joinAsMobile('Mia');
+
+  // Overlay is the default mobile mode: an immersive frame where the prefs live
+  // in the pop-out OPTIONS panel, so the speed button is hidden until it opens.
+  assert.equal(await page.evaluate(() => document.querySelector('#gamewrap').className),
+    'mobile-overlay');
+  assert.equal(await speedReachable(page), false, 'speed hidden while OPTIONS is closed');
+
+  await tapById(page, 'btn-options');
+  assert.equal(await speedReachable(page), true, 'speed reachable once OPTIONS opens');
+  await tapById(page, 'btn-speed');
+  assert.equal(await speedMenuOpen(page), true, 'first tap opens the speed menu');
+
+  // The regression: close the panel while the menu is open, then reopen. The
+  // menu must come back collapsed — otherwise the next ⚡ tap toggles the wrong
+  // way and the button reads as dead (the "logout then cancel" symptom).
+  await tapById(page, 'btn-options'); // close
+  await tapById(page, 'btn-options'); // reopen
+  assert.equal(await speedMenuOpen(page), false, 'menu is reset (collapsed) on reopen');
+  await tapById(page, 'btn-speed');
+  assert.equal(await speedMenuOpen(page), true, 'one tap re-opens it — toggle not inverted');
+
+  // Below mode is also full-screen on a phone, so its prefs + logout have to be
+  // reachable through the same OPTIONS panel (they used to be stranded behind
+  // the fixed game frame with no gear to reach them).
+  await tapById(page, 'btn-pad-mode'); // overlay -> below
+  assert.equal(await page.evaluate(() => document.querySelector('#gamewrap').className),
+    'controls-below');
+  assert.equal(await page.evaluate(() => document.querySelector('#btn-options')?.offsetParent !== null),
+    true, 'the OPTIONS gear is available in below mode');
+  assert.equal(await speedReachable(page), true, 'speed reachable in below mode too');
+  assert.equal(await page.evaluate(() =>
+    Boolean(document.querySelector('#options-panel #btn-logout'))), true,
+    'logout is reachable via the panel in below mode');
+
+  await page._ctx.close();
+});
+
 test('two browsers share one world end-to-end', async () => {
   const ann = await joinAsDemo('Ann');
   const ben = await joinAsDemo('Ben');
