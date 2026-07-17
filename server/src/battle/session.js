@@ -22,8 +22,15 @@ export class BattleSession {
     this.kind = info.kind;
     this.opp = info.opp;
     this.mode = info.mode ?? 'coop';
+    // Team mode (docs/plans/TEAM-BATTLES.md): the enemy wire mon(s) shipped by
+    // the initiator, the fixed team order (leader first), and the pre-merged
+    // lineup party. Turn control rotates from the initiator through teamOrder.
+    this.enemy = info.enemy ?? null; // [[32 ints], …] or null
+    this.teamOrder = info.teamOrder ?? null; // [slots], leader first
+    this.partyWire = info.partyWire ?? null; // pre-built lineup merge
     this.participants = [initiator];
     this.seed = crypto.randomInt(0, 0x1_0000_0000);
+    this._turnsSeen = new Set(); // dedupe: every ROM reports each TURN_BEGIN
     this._onStart = onStart;
     this._timer =
       joinWindowMs > 0 ? setTimeout(() => this.closeWindow(), joinWindowMs) : null;
@@ -62,6 +69,25 @@ export class BattleSession {
   }
 
   startPayload() {
+    const bags = {};
+    for (const p of this.participants) bags[p.slot] = true; // own-bag marker; item lists stay client-side
+    if (this.mode === 'team') {
+      // Lineup + enemy are pre-built by the world (mergeLineupWire); order is
+      // the TEAM order (leader first), and `init` marks the encounter opener —
+      // controller(turn) = order[(indexOf(init) + turn) % order.length].
+      return {
+        t: 'battle.start',
+        sid: this.sid,
+        seed: this.seed,
+        order: this.teamOrder ?? this.participants.map((p) => p.slot),
+        init: this.initiator.slot,
+        mode: 'team',
+        party: null,
+        partyWire: this.partyWire?.length ? this.partyWire : null,
+        enemy: this.enemy,
+        bags,
+      };
+    }
     const order = this.participants.map((p) => p.slot);
     const isPvp = this.mode === 'pvp'; // PvP: each ROM fields its own real party
     const party = isPvp
@@ -70,8 +96,6 @@ export class BattleSession {
     const partyWire = isPvp
       ? null
       : mergeWireParties(this.participants.map((p) => ({ slot: p.slot, fullMons: p.fullMons })));
-    const bags = {};
-    for (const p of this.participants) bags[p.slot] = true; // own-bag marker; item lists stay client-side
     return {
       t: 'battle.start',
       sid: this.sid,
@@ -82,6 +106,24 @@ export class BattleSession {
       partyWire: partyWire?.length ? partyWire : null,
       bags,
     };
+  }
+
+  /** Whose choice drives this turn (team mode): rotate from the initiator
+   *  through the team order — turn 0 = the member who hit the encounter. */
+  controllerFor(turn) {
+    const order = this.teamOrder ?? this.participants.map((p) => p.slot);
+    const initIdx = Math.max(0, order.indexOf(this.initiator.slot));
+    return order[(initIdx + turn) % order.length];
+  }
+
+  /** A ROM reported the start of a turn's action selection. Every participant
+   *  reports each turn; the first report wins and is fanned out to all. */
+  turnBegin(from, turn) {
+    if (this.state !== 'active' || this.mode !== 'team') return;
+    if (!Number.isInteger(turn) || turn < 0 || this._turnsSeen.has(turn)) return;
+    this._turnsSeen.add(turn);
+    const out = { t: 'battle.turn', sid: this.sid, turn, controller: this.controllerFor(turn) };
+    for (const p of this.participants) p.send(out);
   }
 
   relayInput(from, msg) {

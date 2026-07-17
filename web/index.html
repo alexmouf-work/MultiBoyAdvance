@@ -123,6 +123,25 @@
         </div>
       </div>
 
+      <!-- team battles: pale-grey spectator veil while it's not your turn -->
+      <div id="battle-turn-veil" hidden><span id="veil-msg"></span></div>
+
+      <!-- team line-up builder: pick which Pokémon each member sends out, and
+           in what order; the merged preview shows A1,B1,C1,A2,… -->
+      <div id="team-modal" hidden>
+        <div class="trade-card">
+          <h2>Team line-up</h2>
+          <p class="trade-head">Tap your Pokémon in battle order (up to 3). Teammates set their own.</p>
+          <div id="team-rows"></div>
+          <p class="trade-head">Merged send-out order:</p>
+          <ul id="team-merged" class="trade-list"></ul>
+          <div class="trade-actions">
+            <button id="team-save" data-action="team-save" class="primary">Save line-up</button>
+            <button id="team-close" class="ghost">Close</button>
+          </div>
+        </div>
+      </div>
+
       <!-- player-to-player trade: review an incoming offer, or compose one.
            One modal, two modes (#trade-review / #trade-edit). -->
       <div id="trade-modal" hidden>
@@ -232,6 +251,15 @@
         <div class="panel">
           <h3>Trainers</h3>
           <ul id="players"></ul>
+        </div>
+        <div class="panel" id="team-panel">
+          <h3>Team</h3>
+          <p id="team-none" class="hint">No team — use a trainer's “team” button to invite them.</p>
+          <ul id="team-members"></ul>
+          <div id="team-actions" hidden>
+            <button id="btn-team-builder">Line-up…</button>
+            <button id="btn-team-leave">Leave team</button>
+          </div>
         </div>
         <div class="panel">
           <h3>Events</h3>

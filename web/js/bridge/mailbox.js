@@ -155,9 +155,15 @@ export const enc = {
   partySummary: (mons) =>
     Uint8Array.from([mons.length, ...mons.flatMap((m) => [m.sp & 0xff, m.sp >> 8, m.lv, m.hp ?? 100])]),
   request: (sub, arg) => Uint8Array.from([sub, arg]),
-  battleEncounter: (kind, opp) => Uint8Array.from([1, kind, opp & 0xff, opp >> 8]),
+  // Encounter report; team battles append the exact enemy wire mon so every
+  // peer fights the same wild Pokémon (determinism input).
+  battleEncounter: (kind, opp, enemyWire = null) =>
+    Uint8Array.from([1, kind, opp & 0xff, opp >> 8,
+      ...(enemyWire ? enemyWire.slice(0, MON_WIRE_SIZE).map((x) => x & 0xff) : [])]),
   battleTurnInput: (turn, a, move, tgt, x) => Uint8Array.from([2, turn, a, move, tgt, x & 0xff, (x ?? 0) >> 8]),
   battleOutcome: (result) => Uint8Array.from([3, result]),
+  // Team mode: a turn's action selection began; `controller` = whose turn.
+  battleTurnBegin: (turn, controller) => Uint8Array.from([4, turn, controller]),
   hello: () => Uint8Array.from([PROTO_VERSION]),
   ghost: (slot, active, g, n, x, y, f, s) => Uint8Array.from([slot, active, g, n, ...s16(x), ...s16(y), f, s]),
   flagApply: (id) => Uint8Array.from([id & 0xff, id >> 8]),
@@ -166,13 +172,19 @@ export const enc = {
   assign: (slot) => Uint8Array.from([slot]),
   partyFull: (monBytes) => Uint8Array.from([monBytes.length, ...monBytes.flat()]),
   battleParty: (wireMons) => Uint8Array.from([4, wireMons.length, ...wireMons.flat()]),
-  battleStart: (seed, order, mode) =>
+  // START: 11 bytes for coop/pvp; team mode appends {init u8, enemyCount u8,
+  // enemyCount × 32-byte wire mons} so peers can enter the identical battle.
+  battleStart: (seed, order, mode, init = 0xff, enemyWires = null) =>
     Uint8Array.from([
       1,
       seed & 0xff, (seed >>> 8) & 0xff, (seed >>> 16) & 0xff, (seed >>> 24) & 0xff,
       order.length,
       order[0] ?? 0xff, order[1] ?? 0xff, order[2] ?? 0xff, order[3] ?? 0xff,
-      mode === 'pvp' ? 1 : 0,
+      mode === 'pvp' ? 1 : mode === 'team' ? 2 : 0,
+      ...(mode === 'team'
+        ? [init & 0xff, (enemyWires ?? []).length,
+           ...(enemyWires ?? []).flatMap((w) => w.slice(0, MON_WIRE_SIZE).map((x) => x & 0xff))]
+        : []),
     ]),
   battleTurnRelay: (turn, from, a, move, tgt, x) =>
     Uint8Array.from([2, turn, from, a, move, tgt, x & 0xff, (x ?? 0) >> 8]),
@@ -223,9 +235,13 @@ export const dec = {
   },
   battleEvent: (p) => {
     switch (p[0]) {
-      case 1: return { sub: 'encounter', kind: p[1], opp: readU16(p, 2) };
+      case 1: return {
+        sub: 'encounter', kind: p[1], opp: readU16(p, 2),
+        enemy: p.length >= 4 + MON_WIRE_SIZE ? [...p.slice(4, 4 + MON_WIRE_SIZE)] : null,
+      };
       case 2: return { sub: 'input', turn: p[1], a: p[2], move: p[3], tgt: p[4], x: readU16(p, 5) };
       case 3: return { sub: 'outcome', result: p[1] };
+      case 4: return { sub: 'turn.begin', turn: p[1], controller: p[2] };
       default: return { sub: 'unknown' };
     }
   },
@@ -237,7 +253,15 @@ export const dec = {
       case 1: {
         const seed = (p[1] | (p[2] << 8) | (p[3] << 16) | (p[4] << 24)) >>> 0;
         const order = [...p.slice(6, 6 + p[5])];
-        return { sub: 'start', seed, order, mode: p[10] === 1 ? 'pvp' : 'coop' };
+        const mode = p[10] === 1 ? 'pvp' : p[10] === 2 ? 'team' : 'coop';
+        if (mode === 'team' && p.length >= 13) {
+          const enemy = [];
+          for (let i = 0; i < p[12]; i++) {
+            enemy.push([...p.slice(13 + i * MON_WIRE_SIZE, 13 + (i + 1) * MON_WIRE_SIZE)]);
+          }
+          return { sub: 'start', seed, order, mode, init: p[11], enemy };
+        }
+        return { sub: 'start', seed, order, mode };
       }
       case 2: return { sub: 'input', turn: p[1], from: p[2], a: p[3], move: p[4], tgt: p[5], x: readU16(p, 6) };
       case 3: return { sub: 'end', result: p[1] };

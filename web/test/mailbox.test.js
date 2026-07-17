@@ -147,6 +147,35 @@ test('admin codec: every sub round-trips through enc/dec', () => {
   assert.equal(dec.admin(Uint8Array.from([99])).sub, 'unknown');
 });
 
+test('team battle codecs: extended encounter, START with enemy, turn.begin', () => {
+  const enemy = new Array(32).fill(0);
+  enemy[8] = 286 & 0xff;
+  enemy[9] = 286 >> 8;
+  enemy[20] = 9;
+
+  // Encounter: legacy 4-byte form has no enemy; extended form carries it.
+  assert.equal(dec.battleEvent(enc.battleEncounter(0, 286)).enemy, null);
+  const ext = dec.battleEvent(enc.battleEncounter(0, 286, enemy));
+  assert.equal(ext.sub, 'encounter');
+  assert.equal(ext.opp, 286);
+  assert.deepEqual(ext.enemy, enemy);
+
+  // START: coop/pvp stay 11 bytes; team appends init + enemy wires.
+  assert.equal(enc.battleStart(1234, [0, 1], 'coop').length, 11);
+  const teamStart = enc.battleStart(0xdeadbeef, [0, 1], 'team', 1, [enemy]);
+  assert.equal(teamStart.length, 13 + 32);
+  const d = dec.battleCmd(teamStart);
+  assert.equal(d.mode, 'team');
+  assert.equal(d.seed, 0xdeadbeef);
+  assert.deepEqual(d.order, [0, 1]);
+  assert.equal(d.init, 1);
+  assert.deepEqual(d.enemy, [enemy]);
+
+  // TURN_BEGIN round-trip.
+  const tb = dec.battleEvent(enc.battleTurnBegin(3, 2));
+  assert.deepEqual(tb, { sub: 'turn.begin', turn: 3, controller: 2 });
+});
+
 test('trade.deliver codec: 32 wire bytes through, species/level picked out', () => {
   const b = new Array(32).fill(0);
   b[8] = 283 & 0xff; // Mudkip (internal Hoenn order)

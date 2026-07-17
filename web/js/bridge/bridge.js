@@ -171,11 +171,14 @@ export class Bridge {
       }
       case T.BATTLE_EVENT: {
         const b = dec.battleEvent(payload);
-        if (b.sub === 'encounter') this.#socket.send({ t: 'battle.open', kind: b.kind, opp: b.opp });
+        if (b.sub === 'encounter')
+          this.#socket.send({ t: 'battle.open', kind: b.kind, opp: b.opp, ...(b.enemy ? { enemy: b.enemy } : {}) });
         else if (b.sub === 'input' && this.#sid)
           this.#socket.send({ t: 'battle.input', sid: this.#sid, turn: b.turn, a: b.a, move: b.move, tgt: b.tgt, x: b.x });
         else if (b.sub === 'outcome' && this.#sid)
           this.#socket.send({ t: 'battle.end', sid: this.#sid, result: b.result });
+        else if (b.sub === 'turn.begin' && this.#sid)
+          this.#socket.send({ t: 'battle.turn.begin', sid: this.#sid, turn: b.turn });
         break;
       }
     }
@@ -205,7 +208,7 @@ export class Bridge {
       this.#sid = m.sid;
       // Merged party must be staged in the ROM before START lands.
       if (m.partyWire?.length) this.#queueIn(T.BATTLE_CMD, enc.battleParty(m.partyWire));
-      this.#queueIn(T.BATTLE_CMD, enc.battleStart(m.seed, m.order, m.mode));
+      this.#queueIn(T.BATTLE_CMD, enc.battleStart(m.seed, m.order, m.mode, m.init, m.enemy));
     });
     s.on('battle.input', (m) => {
       this.#queueIn(T.BATTLE_CMD, enc.battleTurnRelay(m.turn, m.from, m.a, m.move, m.tgt, m.x));

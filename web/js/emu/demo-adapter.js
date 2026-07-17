@@ -111,10 +111,38 @@ export class DemoAdapter {
     this.events.push({ t: 'speed', x });
   }
 
-  /** Demo UI hook: pretend a wild encounter started. */
+  /** Demo UI hook: pretend a wild encounter started. Ships the exact enemy
+   *  wire mon like the real ROM does, so team battles are deterministic. */
   startEncounter() {
-    this._out(T.BATTLE_EVENT, enc.battleEncounter(0, 261 /* Poochyena */));
+    const enemy = new Array(32).fill(0);
+    enemy[0] = 0x99; // personality
+    enemy[8] = 261 & 0xff; // Poochyena
+    enemy[9] = 261 >> 8;
+    enemy[20] = 7; // level
+    this._out(T.BATTLE_EVENT, enc.battleEncounter(0, 261, enemy));
     this.events.push({ t: 'encounter.open' });
+  }
+
+  /** Demo UI/e2e hook (team battles): the controller submits this turn's
+   *  action, then everyone advances to the next turn. */
+  sendTurnInput(a = 1) {
+    if (!this.battle) return;
+    const turn = this.battle.turnNo ?? 0;
+    this._out(T.BATTLE_EVENT, enc.battleTurnInput(turn, a, 0, 0, 0));
+    this.events.push({ t: 'battle.input.sent', turn, a });
+    this.#advanceTurn(turn + 1);
+  }
+
+  /** Team-battle turn keeping: every participant tracks the turn number and
+   *  reports TURN_BEGIN (the server dedupes and fans out battle.turn). */
+  #advanceTurn(turnNo) {
+    if (!this.battle || this.battle.mode !== 'team') return;
+    this.battle.turnNo = turnNo;
+    const order = this.battle.order ?? [];
+    const initIdx = Math.max(0, order.indexOf(this.battle.init ?? order[0]));
+    const controller = order.length ? order[(initIdx + turnNo) % order.length] : 0;
+    this._out(T.BATTLE_EVENT, enc.battleTurnBegin(turnNo, controller));
+    this.events.push({ t: 'battle.turn.begin', turn: turnNo, controller });
   }
 
   /** Demo UI hook: report battle outcome (initiator side). */
@@ -177,12 +205,20 @@ export class DemoAdapter {
         case T.BATTLE_CMD: {
           const c = dec.battleCmd(payload);
           if (c.sub === 'start') {
-            this.battle = c;
-            this.events.push({ t: 'battle.started', seed: c.seed, order: c.order, mode: c.mode });
+            this.battle = { ...c, turnNo: 0 };
+            this.events.push({
+              t: 'battle.started', seed: c.seed, order: c.order, mode: c.mode,
+              ...(c.mode === 'team' ? { init: c.init, enemy: c.enemy?.length ?? 0 } : {}),
+            });
+            // Team mode: the identical battle starts everywhere; report turn 0
+            // so the server can announce the first controller (the initiator).
+            if (c.mode === 'team') this.#advanceTurn(0);
           } else if (c.sub === 'party') {
             this.events.push({ t: 'battle.party', count: c.mons.length });
           } else if (c.sub === 'input') {
             this.events.push({ t: 'battle.input', from: c.from, a: c.a });
+            // A relayed choice ends the current turn for everyone.
+            if (this.battle?.mode === 'team') this.#advanceTurn((c.turn ?? 0) + 1);
           } else if (c.sub === 'end') {
             this.battle = null;
             this.events.push({ t: 'battle.ended', result: c.result });

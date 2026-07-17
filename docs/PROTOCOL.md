@@ -89,7 +89,7 @@ record self-delimiting). Types `0x01–0x7F` flow game→host, `0x80–0xFF` hos
 | 0x07 | `PARTY_FULL` | count u8, then count × 32-byte wire mons (§1.5) — sent on party change; the server merges these for co-op battles |
 | 0x06 | `REQUEST` | sub u8, arg u8: sub 1=teleport-to-slot(arg), 2=pvp-challenge(arg), 3=pvp-accept(arg), 4=resync (arg unused; a fresh save asks the server to replay world flags/vars + identity) |
 | 0x0F | `LOG` | raw ASCII text (≤48 bytes) — the game's debug feed (`NetLog`/`NetLogNum`). Bridges surface it locally (web Debug panel / mGBA console); it is NOT forwarded to the server |
-| 0x10 | `BATTLE_EVENT` | sub u8, then: sub 1=ENCOUNTER_OPEN {kind u8, opponent u16}; sub 2=TURN_INPUT {turn u8, action u8, moveSlot u8, target u8, extra u16}; sub 3=OUTCOME {result u8: 1=win 2=loss 3=flee} |
+| 0x10 | `BATTLE_EVENT` | sub u8, then: sub 1=ENCOUNTER_OPEN {kind u8, opponent u16, then OPTIONALLY one 32-byte enemy wire mon (§1.5) — team battles ship the exact wild enemy so every peer fights the same mon}; sub 2=TURN_INPUT {turn u8, action u8, moveSlot u8, target u8, extra u16}; sub 3=OUTCOME {result u8: 1=win 2=loss 3=flee}; sub 4=TURN_BEGIN {turn u8, controller u8} — team mode: a turn's action selection began (bridge forwards it as `battle.turn.begin`) |
 | 0x11 | `SAVED` | no payload — the game wrote its flash save (first save, map-change save, or a manual START-menu save). The web bridge reacts by mirroring the .sav to IndexedDB and `PUT /api/save/<name>` |
 | 0x12 | `SAVEBLOCKS` | mailboxAddr u32, saveCounter u32, lastWrittenSector u8, then 3 × {ptr u32, size u32} for SaveBlock2 / SaveBlock1 / PokemonStorage — the freeze-free save path (§1.7); emitted every ~10s from the overworld after `CopyPartyAndObjectsToSave` |
 | 0x7F | `HELLO` | version u8 — game finished booting netcode |
@@ -103,7 +103,7 @@ record self-delimiting). Types `0x01–0x7F` flow game→host, `0x80–0xFF` hos
 | 0x83 | `VAR_APPLY` | varId u16, value u16 |
 | 0x85 | `WARP` | mapGroup u8, mapNum u8, x s16, y s16 — teleport the local player (applied at next safe overworld frame) |
 | 0x86 | `ASSIGN` | slot u8 — server-assigned player slot (bridge also writes `playerSlot` in the header) |
-| 0x90 | `BATTLE_CMD` | sub u8, then: sub 1=START {seed u32, playerCount u8, order[4] u8, mode u8}; sub 2=TURN_INPUT {turn u8, fromSlot u8, action u8, moveSlot u8, target u8, extra u16}; sub 3=END {result u8}; sub 4=PARTY {count u8, count × 32-byte wire mons} — sent *before* START; the ROM stages it and injects at START (co-op), restoring the original party at END |
+| 0x90 | `BATTLE_CMD` | sub u8, then: sub 1=START {seed u32, playerCount u8, order[4] u8, mode u8 (0=coop 1=pvp 2=team); team mode appends {init u8 — the encounter opener's slot, enemyCount u8, enemyCount × 32-byte enemy wire mons} so a peer can enter the identical battle}; sub 2=TURN_INPUT {turn u8, fromSlot u8, action u8, moveSlot u8, target u8, extra u16}; sub 3=END {result u8}; sub 4=PARTY {count u8, count × 32-byte wire mons} — sent *before* START; the ROM stages it and injects at START (co-op/team), restoring the original party at END |
 | 0x91 | `ADMIN` | sub u8, then per-sub fields (§1.6) — console/server-initiated actions applied to the local game |
 | 0x92 | `TRADE_DELIVER` | one 32-byte wire mon (§1.5) received in an accepted trade. Enqueued on receipt (`net_trade.c`) and applied on a safe overworld frame via `GiveMonToPlayer` — party, or the first free PC box slot when the party is full |
 
@@ -187,10 +187,16 @@ Every message has `t` (type). Server assigns each connection an integer `slot`
 | `var` | `id` int, `v` int | synced var changed |
 | `party` | `mons` [{`sp`,`lv`,`hp`}] | party summary (roster UI) |
 | `party.full` | `mons` [{`lv`, `b`:[32 ints]}] | full wire mons (§1.5) for co-op merges |
-| `battle.open` | `kind` int, `opp` int | local player is entering a battle; open a join window |
+| `battle.open` | `kind` int, `opp` int, `enemy?` [32 ints] | local player is entering a battle; opens a join window — UNLESS the player is in a team with a teammate online, which starts a shared team battle immediately. `enemy` (present in team play) is the exact wild enemy wire mon (§1.5) |
 | `battle.join` | `sid` string | join battle session `sid` (spectate→control) |
 | `battle.input` | `sid`, `turn`, `a`, `move`, `tgt`, `x` | turn input |
 | `battle.end` | `sid`, `result` 1/2/3 | initiator reports outcome |
+| `battle.turn.begin` | `sid`, `turn` | team mode: this ROM's battle reached turn `turn`'s action selection. Every participant reports each turn; the server dedupes per (sid, turn) and answers with one `battle.turn` fan-out |
+| `team.create` | — | create a team led by the sender (idempotent) |
+| `team.invite` | `to` slot | leader invites an ONLINE player (offline players cannot be invited; max 3 members). Invites expire after 120 s |
+| `team.accept` / `team.reject` | `from` slot (the leader) | answer a pending invite |
+| `team.leave` | — | leave the team; the LEADER leaving disbands it for everyone |
+| `team.lineup` | `picks` int[] | my ordered party indices (≤3, deduped) for the team-builder line-up; the merged send-out order interleaves by rank across members, leader first: A1,B1,(C1),A2,… |
 | `tp` | `to` slot | ask to teleport to player `to` (they must accept — "/tpa" style) |
 | `tp.accept` | `from` slot | accept a pending teleport request (requests expire after 60 s) |
 | `pvp` | `to` slot | challenge player `to` |
@@ -216,8 +222,9 @@ Every message has `t` (type). Server assigns each connection an integer `slot`
 | `ghost` | `slot,g,n,x,y,f,s` | another player's presence (only sent to players on the same map; a synthetic `s:255` despawns) |
 | `flag` / `var` | `id`, `v?` | authoritative world-state update |
 | `battle.offer` | `sid`, `from` slot, `kind`, `opp`, `ttl` ms | someone opened a battle you may join |
-| `battle.start` | `sid`, `seed`, `order` [slots], `party` [summary mons], `partyWire` [[32 ints]] (co-op only), `bags` {slot:[...]} | session begins (merged party, shared seed, turn order) |
+| `battle.start` | `sid`, `seed`, `order` [slots], `party` [summary mons], `partyWire` [[32 ints]] (co-op/team), `bags` {slot:[...]}; team mode adds `mode:'team'`, `init` (the encounter opener's slot) and `enemy` [[32 ints]] | session begins (merged party, shared seed, turn order). Team: `order` is the TEAM order (leader first) and control rotates `controller(turn) = order[(indexOf(init)+turn) % N]` — turn 0 belongs to the initiator |
 | `battle.input` | `sid`, `turn`, `from`, `a`, `move`, `tgt`, `x` | relayed turn input |
+| `battle.turn` | `sid`, `turn`, `controller` slot | team mode: authoritative "whose turn is it" (deduped fan-out of `battle.turn.begin`); the web UI greys the screen while `controller` isn't you |
 | `battle.end` | `sid`, `result`, `warp?` {g,n,x,y} | session over; optional respawn/return warp |
 | `warp` | `g,n,x,y` | teleport instruction (accepted tp / pvp / whiteout / `/warp`) |
 | `pvp.req` | `from` slot, `name` | incoming challenge |
@@ -228,6 +235,9 @@ Every message has `t` (type). Server assigns each connection an integer `slot`
 | `trade.deliver` | `from` slot, `b` [32 ints] | one traded-in wire mon (§1.5); the bridge forwards it as TRADE_DELIVER TLV 0x92 (party, or PC when full) |
 | `trade.cancelled` | `from` slot, `reason` | your pending offer to `from` was rejected / they went offline |
 | `trade.done` | `ok` bool, `with` slot, `summary?`/`msg?` | trade executed (summary) or failed validation (why); sent to both ends |
+| `team.req` | `from` slot (leader), `name` | you were invited to a team |
+| `team.update` | `id`, `leader` slot, `members` [{`slot`, `name`, `party` [{sp,lv,hp}], `picks` int[]\|null}] | full team roster + everyone's line-up picks (null = auto top-3 by level); sent to members on every change |
+| `team.left` | `slot`, `disbanded?` bool, `declined?` bool | a member left / the team dissolved (leader gone) / an invitee declined. Also echoed to the leaver so their own UI clears |
 | `cmd.result` | `ok` bool, `msg` string | console command reply |
 | `sync` | `flags` [int], `vars` [[id,v]] | world-state replay outside `welcome` (answers `resync` — new-game init wiped what the welcome applied) |
 | `speed` | `x` int 1–4 | authoritative shared speed; every bridge applies it to its emulator |

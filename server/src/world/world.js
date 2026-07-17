@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { WorldState } from './state.js';
 import { BattleSession } from '../battle/session.js';
+import { mergeLineupWire } from '../battle/merge.js';
 import { inRanges } from '../protocol.js';
 import { runCommand } from '../commands.js';
 import { forgeSave, FLASH_SIZE, SECTOR_DATA_SIZE } from '../saveforge.js';
@@ -16,6 +17,8 @@ const TP_REQUEST_TTL_MS = 60_000;
 const TRADE_OFFER_TTL_MS = 120_000; // 2 min to answer a trade offer
 const TRADE_MAX_ITEMS = 8; // per side
 const TRADE_MAX_MONS = 6; // per side
+const TEAM_INVITE_TTL_MS = 120_000; // 2 min to answer a team invite
+const TEAM_MAX = 3; // members per team (A,B,C → A1,B1,C1,A2,B2,C2)
 
 // Hoenn starters + the kit every new player gets alongside one. These are the
 // ROM's INTERNAL Hoenn species order (pokeemerald constants), NOT National Dex
@@ -57,6 +60,7 @@ class Client {
     this.fullMons = []; // latest full wire mons [{lv, b:[32 ints]}]
     this.tpRequests = new Map(); // requester slot -> timestamp (awaiting our accept)
     this.tradeOffers = new Map(); // proposer slot -> {at, give, want} (awaiting our answer)
+    this.teamId = null; // id of the team this player belongs to (world.teams)
     this.starterAt = 0; // last starter grant (retryable while the party is empty)
     this.joinedAt = Date.now();
     this.lastSeen = Date.now();
@@ -74,6 +78,9 @@ export class World {
     this.battles = new Map();
     /** @type {Map<string, number>} resume id -> slot (for reconnects) */
     this.resumable = new Map();
+    /** @type {Map<string, object>} teamId -> {id, leader, members, invites, lineup} */
+    this.teams = new Map();
+    this._teamSeq = 1;
     /** Shared emulator speed multiplier (1-4) — one world, one clock. */
     this.speed = 1;
   }
@@ -144,6 +151,9 @@ export class World {
     }
     client.tradeOffers.clear();
     for (const c of this.clients.values()) c.tradeOffers.delete(client.slot);
+    // Team GC: a leaving member drops out; a leaving LEADER disbands the team.
+    const team = this._teamOf(client);
+    if (team) this._removeFromTeam(team, client);
   }
 
   /** Remove a trainer from the registry (offline only). Used by /delete. */
@@ -195,6 +205,13 @@ export class World {
       case 'trade.offer': return this._onTradeOffer(client, msg);
       case 'trade.accept': return this._onTradeAccept(client, msg);
       case 'trade.reject': return this._onTradeReject(client, msg);
+      case 'team.create': return this._onTeamCreate(client);
+      case 'team.invite': return this._onTeamInvite(client, msg);
+      case 'team.accept': return this._onTeamAccept(client, msg);
+      case 'team.reject': return this._onTeamReject(client, msg);
+      case 'team.leave': return this._onTeamLeave(client);
+      case 'team.lineup': return this._onTeamLineup(client, msg);
+      case 'battle.turn.begin': return this._onBattleTurnBegin(client, msg);
       case 'starter': return this._onStarter(client, msg);
       case 'resync': return this._onResync(client);
       case 'save.blocks': return this._onSaveBlocks(client, msg);
@@ -271,9 +288,124 @@ export class World {
       .map((m) => ({ lv: m.lv | 0, b: m.b.map((x) => x & 0xff) }));
   }
 
+  // ---- teams (docs/plans/TEAM-BATTLES.md T1) ---------------------------------
+  // Ephemeral, in-memory. Leader creates + invites (online players only, max
+  // 3 members); invites mirror the teleport handshake (stored + TTL, verified
+  // at accept). The leader leaving disbands the team.
+
+  _teamOf(client) {
+    return client.teamId ? this.teams.get(client.teamId) : null;
+  }
+
+  _sendTeamUpdate(team) {
+    const members = team.members.map((s) => {
+      const c = this.clients.get(s);
+      return { slot: s, name: c?.name ?? `P${s + 1}`, party: c?.party ?? [], picks: team.lineup[s] ?? null };
+    });
+    const payload = { t: 'team.update', id: team.id, leader: team.leader, members };
+    for (const s of team.members) this.clients.get(s)?.send(payload);
+  }
+
+  _removeFromTeam(team, client) {
+    client.teamId = null;
+    team.members = team.members.filter((s) => s !== client.slot);
+    delete team.lineup[client.slot];
+    // Tell the leaver too (no-op after a disconnect — the transport is gone),
+    // so their own UI clears without inferring it.
+    client.send({ t: 'team.left', slot: client.slot, ...(team.leader === client.slot ? { disbanded: true } : {}) });
+    if (team.leader === client.slot || team.members.length === 0) {
+      // Leader gone (or nobody left): disband, telling every remaining member.
+      for (const s of team.members) {
+        const c = this.clients.get(s);
+        if (c) {
+          c.teamId = null;
+          c.send({ t: 'team.left', slot: client.slot, disbanded: true });
+        }
+      }
+      this.teams.delete(team.id);
+    } else {
+      for (const s of team.members) this.clients.get(s)?.send({ t: 'team.left', slot: client.slot });
+      this._sendTeamUpdate(team);
+    }
+  }
+
+  _onTeamCreate(client) {
+    const existing = this._teamOf(client);
+    if (existing) return this._sendTeamUpdate(existing); // idempotent
+    const team = {
+      id: `t${this._teamSeq++}`,
+      leader: client.slot,
+      members: [client.slot], // team order: leader first (A1,B1,C1 interleave)
+      invites: new Map(), // invitee slot -> timestamp
+      lineup: {}, // member slot -> ordered party indices (team-builder picks)
+    };
+    this.teams.set(team.id, team);
+    client.teamId = team.id;
+    this._sendTeamUpdate(team);
+  }
+
+  _onTeamInvite(client, msg) {
+    const team = this._teamOf(client);
+    if (!team) return client.send({ t: 'error', msg: 'create a team first (/team create)' });
+    if (team.leader !== client.slot) return client.send({ t: 'error', msg: 'only the team leader can invite' });
+    const target = this.clients.get(msg.to); // online-only by construction
+    if (!target || target === client) return client.send({ t: 'error', msg: 'player not available' });
+    if (target.teamId) return client.send({ t: 'error', msg: `${target.name} is already in a team` });
+    if (team.members.length >= TEAM_MAX) return client.send({ t: 'error', msg: `team is full (max ${TEAM_MAX})` });
+    team.invites.set(target.slot, Date.now());
+    target.send({ t: 'team.req', from: client.slot, name: client.name });
+  }
+
+  _onTeamAccept(client, msg) {
+    const leader = this.clients.get(msg.from);
+    const team = leader ? this._teamOf(leader) : null;
+    if (!team || team.leader !== msg.from) return client.send({ t: 'error', msg: 'that team is gone' });
+    const asked = team.invites.get(client.slot);
+    team.invites.delete(client.slot);
+    if (asked === undefined || Date.now() - asked > TEAM_INVITE_TTL_MS) {
+      return client.send({ t: 'error', msg: 'team invite expired' });
+    }
+    if (client.teamId) return client.send({ t: 'error', msg: 'leave your current team first' });
+    if (team.members.length >= TEAM_MAX) return client.send({ t: 'error', msg: `team is full (max ${TEAM_MAX})` });
+    team.members.push(client.slot);
+    client.teamId = team.id;
+    this._sendTeamUpdate(team);
+  }
+
+  _onTeamReject(client, msg) {
+    const leader = this.clients.get(msg.from);
+    const team = leader ? this._teamOf(leader) : null;
+    if (!team || !team.invites.delete(client.slot)) return;
+    leader.send({ t: 'team.left', slot: client.slot, declined: true });
+  }
+
+  _onTeamLeave(client) {
+    const team = this._teamOf(client);
+    if (team) this._removeFromTeam(team, client);
+  }
+
+  _onTeamLineup(client, msg) {
+    const team = this._teamOf(client);
+    if (!team) return;
+    const seen = new Set();
+    team.lineup[client.slot] = (Array.isArray(msg.picks) ? msg.picks : [])
+      .map((i) => i | 0)
+      .filter((i) => i >= 0 && i < 6 && !seen.has(i) && seen.add(i))
+      .slice(0, 3);
+    this._sendTeamUpdate(team);
+  }
+
   // ---- battles -----------------------------------------------------------------
 
   _onBattleOpen(client, msg) {
+    // A team member's wild encounter pulls every ONLINE member into one shared
+    // battle immediately — no join window, regardless of location. With no
+    // teammate online the initiator falls through to the normal solo path.
+    const team = this._teamOf(client);
+    if (team) {
+      const online = team.members.map((s) => this.clients.get(s)).filter(Boolean);
+      if (online.length >= 2) return this._openTeamBattle(client, team, online, msg);
+    }
     const session = new BattleSession(
       client,
       { kind: msg.kind, opp: msg.opp },
@@ -283,6 +415,39 @@ export class World {
     this.battles.set(session.sid, session);
     const offer = { t: 'battle.offer', sid: session.sid, from: client.slot, kind: msg.kind, opp: msg.opp, ttl: this.cfg.battleJoinWindowMs };
     for (const peer of this._peersOnMap(client.map, client)) peer.send(offer);
+  }
+
+  _openTeamBattle(client, team, online, msg) {
+    const partyWire = mergeLineupWire(online.map((c) => ({
+      slot: c.slot,
+      fullMons: c.fullMons,
+      picks: team.lineup[c.slot] ?? null,
+    })));
+    // The initiator's ROM ships the exact wild enemy so every peer fights the
+    // same mon (determinism input; without it each ROM would roll its own).
+    const enemy = Array.isArray(msg.enemy) && msg.enemy.length === 32
+      ? [msg.enemy.map((x) => x & 0xff)]
+      : null;
+    const session = new BattleSession(
+      client,
+      {
+        kind: msg.kind,
+        opp: msg.opp,
+        mode: 'team',
+        enemy,
+        teamOrder: online.map((c) => c.slot), // already team order: leader first
+        partyWire,
+      },
+      0,
+      (s) => this._startBattle(s),
+    );
+    this.battles.set(session.sid, session);
+    for (const m of online) if (m !== client) session.join(m);
+    session.startNow();
+  }
+
+  _onBattleTurnBegin(client, msg) {
+    this.battles.get(String(msg.sid))?.turnBegin(client, msg.turn);
   }
 
   _onBattleJoin(client, msg) {

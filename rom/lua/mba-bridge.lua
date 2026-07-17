@@ -369,11 +369,19 @@ local function gameToWire(rec)
   elseif t == T.BATTLE_EVENT then
     local sub = p[1]
     if sub == 1 then
-      send({ t = "battle.open", kind = p[2], opp = u16(b, 2) })
+      local msg = { t = "battle.open", kind = p[2], opp = u16(b, 2) }
+      if #p >= 4 + MON_WIRE_SIZE then -- team battles ship the exact enemy mon
+        local enemy = {}
+        for i = 1, MON_WIRE_SIZE do enemy[i] = p[4 + i] end
+        msg.enemy = enemy
+      end
+      send(msg)
     elseif sub == 2 and sid then
       send({ t = "battle.input", sid = sid, turn = p[2], a = p[3], move = p[4], tgt = p[5], x = u16(b, 5) })
     elseif sub == 3 and sid then
       send({ t = "battle.end", sid = sid, result = p[2] })
+    elseif sub == 4 and sid then -- team mode: a turn's action selection began
+      send({ t = "battle.turn.begin", sid = sid, turn = p[2] })
     end
   end
 end
@@ -424,14 +432,22 @@ handleWire = function(m)
       end
       queueIn(T.BATTLE_CMD, pp)
     end
-    queueIn(T.BATTLE_CMD, {
+    local start = {
       1,
       seed % 256, math.floor(seed / 0x100) % 256, math.floor(seed / 0x10000) % 256, math.floor(seed / 0x1000000) % 256,
       #m.order,
       m.order[1] or 0xFF, m.order[2] or 0xFF, m.order[3] or 0xFF, m.order[4] or 0xFF,
-      (m.mode == "pvp") and 1 or 0,
-    })
-    log("battle " .. m.sid .. " started, seed " .. seed)
+      (m.mode == "pvp") and 1 or ((m.mode == "team") and 2 or 0),
+    }
+    if m.mode == "team" then -- extended: init + enemy wire mon(s)
+      start[#start + 1] = m.init or 0xFF
+      start[#start + 1] = #(m.enemy or {})
+      for _, mon in ipairs(m.enemy or {}) do
+        for i = 1, MON_WIRE_SIZE do start[#start + 1] = mon[i] or 0 end
+      end
+    end
+    queueIn(T.BATTLE_CMD, start)
+    log("battle " .. m.sid .. " started, seed " .. seed .. " (" .. (m.mode or "coop") .. ")")
   elseif m.t == "battle.input" then
     queueIn(T.BATTLE_CMD, { 2, m.turn, m.from, m.a, m.move or 0, m.tgt or 0, lo(m.x or 0), hi(m.x or 0) })
   elseif m.t == "battle.end" then
@@ -484,6 +500,17 @@ handleWire = function(m)
     log("trade with P" .. (m.from + 1) .. " cancelled (" .. (m.reason or "?") .. ")")
   elseif m.t == "trade.done" then
     log(m.ok and ("trade complete: " .. (m.summary or "")) or ("trade failed: " .. (m.msg or "?")))
+  elseif m.t == "team.req" then
+    log("team invite from P" .. (m.from + 1) .. " (" .. (m.name or "?")
+      .. ") — /team accept p" .. (m.from + 1) .. " in the console")
+  elseif m.t == "team.update" then
+    local names = {}
+    for _, mem in ipairs(m.members or {}) do names[#names + 1] = mem.name end
+    log("team: " .. table.concat(names, ", "))
+  elseif m.t == "team.left" then
+    log(m.disbanded and "team disbanded" or ("P" .. (m.slot + 1) .. (m.declined and " declined" or " left the team")))
+  elseif m.t == "battle.turn" then
+    log("battle turn " .. (m.turn or 0) .. ": P" .. ((m.controller or 0) + 1) .. " is choosing")
   elseif m.t == "cmd.result" then
     log("cmd: " .. (m.msg or ""))
   elseif m.t == "error" then

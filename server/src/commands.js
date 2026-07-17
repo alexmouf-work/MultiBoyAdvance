@@ -13,6 +13,8 @@ const HELP = [
   '/tp <player> — request to teleport to them (they accept)',
   '/trade <player> give <slot 1-6> [for <speciesId>] — offer a party Pokémon',
   '/trade <player> accept|reject — answer their pending trade offer',
+  '/team create — start a team (you lead) · /team invite <player> · /team leave',
+  '/team accept|reject <player> — answer a team invite · /team lineup <slots 1-6…>',
   '/warp <group> <map> <x> <y> — warp yourself to map coordinates',
   '/delete <name> — remove an offline trainer from the registry',
   '/resetlocal — (browser) wipe this device\'s local data and reload',
@@ -143,6 +145,39 @@ export function runCommand(world, me, line) {
         want: wantSp ? { mons: [{ sp: wantSp }] } : {},
       });
       return { ok: true, msg: `trade offer sent to ${target.name}` };
+    }
+
+    case '/team': {
+      const usage = 'usage: /team create · invite <player> · accept|reject <player> · lineup <slots 1-6…> · leave';
+      switch ((a[0] ?? '').toLowerCase()) {
+        case 'create':
+          world.handle(me, { t: 'team.create' });
+          return { ok: true, msg: 'team ready — /team invite <player>' };
+        case 'invite': {
+          const target = findTarget(world, me, a[1]);
+          if (!target || target === me) return { ok: false, msg: usage };
+          world.handle(me, { t: 'team.invite', to: target.slot });
+          return { ok: true, msg: `team invite sent to ${target.name}` };
+        }
+        case 'accept':
+        case 'reject': {
+          const target = findTarget(world, me, a[1]);
+          if (!target) return { ok: false, msg: usage };
+          world.handle(me, { t: `team.${a[0].toLowerCase()}`, from: target.slot });
+          return { ok: true, msg: `invite ${a[0].toLowerCase()}ed` };
+        }
+        case 'lineup': {
+          const picks = a.slice(1).map((s) => int(s, 1, 6)).filter((n) => n !== null).map((n) => n - 1);
+          if (!picks.length) return { ok: false, msg: usage };
+          world.handle(me, { t: 'team.lineup', picks });
+          return { ok: true, msg: `line-up set: party slots ${picks.map((p) => p + 1).join(', ')}` };
+        }
+        case 'leave':
+          world.handle(me, { t: 'team.leave' });
+          return { ok: true, msg: 'left the team' };
+        default:
+          return { ok: false, msg: usage };
+      }
     }
 
     case '/warp': {

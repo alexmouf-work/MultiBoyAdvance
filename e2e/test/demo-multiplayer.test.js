@@ -201,6 +201,99 @@ test('trading: offer → counter-offer → accept moves Pokémon both ways', asy
   await ubo.close();
 });
 
+test('team battles: invite → line-up → shared battle with rotating grey veil', async () => {
+  const ann = await joinAsDemo('Amy');
+  const ben = await joinAsDemo('Bob');
+  const annSlot = await ann.evaluate(() => window.mba.ui.slot);
+  const benSlot = await ben.evaluate(() => window.mba.ui.slot);
+  for (const page of [ann, ben]) {
+    await page.waitForFunction(() => window.mba.ui.myParty?.length === 3, null, { timeout: 5000 });
+  }
+
+  // Amy invites Bob from the roster (auto-creates her team); Bob accepts.
+  await ann.click(`#players li[data-slot="${benSlot}"] button[data-action="team-invite"]`);
+  await ben.waitForSelector('.offer button[data-action="team-accept"]', { timeout: 5000 });
+  await ben.click('.offer button[data-action="team-accept"]');
+  for (const page of [ann, ben]) {
+    await page.waitForFunction((n) => window.mba.ui.team?.members?.length === n, 2, { timeout: 5000 });
+  }
+  const team = await ann.evaluate(() => window.mba.ui.team);
+  assert.equal(team.leader, annSlot, 'inviter leads');
+  assert.deepEqual(team.members.map((m) => m.slot), [annSlot, benSlot], 'leader first');
+
+  // Bob sets a custom line-up in the builder: his mons in order 2,1 (idx 1,0).
+  await ben.click('#btn-team-builder');
+  await ben.waitForSelector('#team-modal:not([hidden])', { timeout: 5000 });
+  await ben.click('.team-row .trade-picks button[data-idx="1"]:not([disabled])');
+  await ben.click('.team-row .trade-picks button[data-idx="0"]:not([disabled])');
+  await ben.click('#team-save');
+  await ann.waitForFunction(
+    (slot) => JSON.stringify(window.mba.ui.team?.members?.find((m) => m.slot === slot)?.picks) === '[1,0]',
+    benSlot, { timeout: 5000 },
+  );
+
+  // BOB runs into a wild mon: both members are pulled into one team battle.
+  await ben.evaluate(() => window.mba.adapter.startEncounter());
+  for (const page of [ann, ben]) {
+    await page.waitForFunction(
+      () => window.mba.adapter.events.some((e) => e.t === 'battle.started' && e.mode === 'team'),
+      null, { timeout: 5000 },
+    );
+  }
+  const started = await ann.evaluate(() => window.mba.adapter.events.find((e) => e.t === 'battle.started'));
+  assert.equal(started.init, benSlot, 'the encounter opener takes the first turn');
+  assert.equal(started.enemy, 1, 'the exact enemy mon shipped to the peer');
+
+  // NOTE: waitForSelector defaults to the "visible" state, which a [hidden]
+  // element never reaches — assert veil state via the DOM property instead.
+  const veilShown = (page, want) => page.waitForFunction(
+    (w) => document.querySelector('#battle-turn-veil')?.hidden === !w,
+    want, { timeout: 5000 },
+  );
+
+  // The UI veil flips on the fast socket path; the adapter's turn counter
+  // advances on the slower mailbox path — wait for the adapter to reach the
+  // turn before acting on it, or the input reports an already-deduped turn.
+  const atTurn = (page, n) => page.waitForFunction(
+    (t) => window.mba.adapter.battle?.turnNo === t, n, { timeout: 5000 },
+  );
+
+  // Turn 0: Bob controls — Amy is veiled, Bob is not.
+  await veilShown(ann, true);
+  await veilShown(ben, false);
+
+  // Bob submits his action → turn 1 rotates to Amy; the veils flip.
+  await atTurn(ben, 0);
+  await ben.evaluate(() => window.mba.adapter.sendTurnInput(1));
+  await veilShown(ben, true);
+  await veilShown(ann, false);
+
+  // And back: Amy acts → turn 2 is Bob's again.
+  await atTurn(ann, 1);
+  await ann.evaluate(() => window.mba.adapter.sendTurnInput(1));
+  await veilShown(ann, true);
+  await veilShown(ben, false);
+
+  // The initiator (Bob) reports the win; the veil clears everywhere.
+  await ben.evaluate(() => window.mba.adapter.endBattle(1));
+  for (const page of [ann, ben]) {
+    await page.waitForFunction(
+      () => window.mba.adapter.events.some((e) => e.t === 'battle.ended' && e.result === 1),
+      null, { timeout: 5000 },
+    );
+    await veilShown(page, false);
+  }
+
+  // Leader leaves → the team disbands for everyone.
+  await ann.click('#btn-team-leave');
+  for (const page of [ann, ben]) {
+    await page.waitForFunction(() => window.mba.ui.team === null, null, { timeout: 5000 });
+  }
+
+  await ann.close();
+  await ben.close();
+});
+
 test('two browsers share one world end-to-end', async () => {
   const ann = await joinAsDemo('Ann');
   const ben = await joinAsDemo('Ben');

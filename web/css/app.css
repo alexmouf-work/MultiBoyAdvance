@@ -358,7 +358,7 @@ button.ghost { background: transparent; }
 
 /* ---- trade modal (docs/plans/TRADING.md §8.2): review OR compose an offer.
    Above toasts (70) and the options gear (60), below the boot overlay (90). ---- */
-#trade-modal {
+#trade-modal, #team-modal {
   position: absolute;
   inset: 0;
   z-index: 85;
@@ -368,7 +368,7 @@ button.ghost { background: transparent; }
   background: rgba(0, 0, 0, 0.55);
   border-radius: 10px;
 }
-#trade-modal[hidden] { display: none; }
+#trade-modal[hidden], #team-modal[hidden] { display: none; }
 #trade-review[hidden], #trade-edit[hidden] { display: none; }
 .trade-card {
   background: var(--panel);
@@ -417,6 +417,38 @@ button.ghost { background: transparent; }
 .trade-add { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: 6px 0; }
 .trade-add input { width: 90px; }
 .trade-actions { display: flex; gap: 10px; justify-content: center; margin-top: 16px; flex-wrap: wrap; }
+
+/* ---- team battles (docs/plans/TEAM-BATTLES.md §8.3): spectator veil — the
+   pale grey tint over the identical battle while it's not your turn. Above
+   the game frame (50), below the options gear/toasts (60/70). ---- */
+#battle-turn-veil {
+  position: absolute;
+  inset: 0;
+  z-index: 55;
+  background: rgba(150, 150, 150, 0.38);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  pointer-events: none;
+}
+#battle-turn-veil[hidden] { display: none; }
+#veil-msg {
+  margin-top: 46px;
+  background: rgba(22, 27, 34, 0.92);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 13px;
+}
+
+/* team sidebar panel + line-up builder */
+#team-members { list-style: none; margin: 0; padding: 0; }
+#team-members li { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 14px; }
+#team-members .lead { font-size: 11px; color: var(--accent); border: 1px solid var(--accent); border-radius: 999px; padding: 1px 6px; }
+#team-actions { display: flex; gap: 8px; margin-top: 8px; }
+.team-row { margin: 8px 0; }
+.team-row .who { font-size: 13px; color: var(--dim); display: block; margin-bottom: 4px; }
+.team-row .trade-picks button:disabled { cursor: default; }
 
 .panel {
   background: var(--panel);

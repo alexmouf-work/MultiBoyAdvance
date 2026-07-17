@@ -31,12 +31,16 @@ export class UI {
     this.ghosts = new Map(); // slot -> last ghost pos (proximity checks)
     this.myParty = []; // own party summary [{sp,lv,hp}] (trade picker source)
     this.trade = null; // open trade modal state (docs/plans/TRADING.md §8.2)
+    this.team = null; // latest team.update (docs/plans/TEAM-BATTLES.md T1)
+    this.teamPicks = null; // working copy of my line-up picks in the builder
+    this.teamBattle = null; // {sid} while a team battle session is live (veil)
     this.$ = (sel) => document.querySelector(sel);
     this.#wire();
     this.#wireConsole();
     this.#wireStarter();
     this.#wireProximity();
     this.#wireTrade();
+    this.#wireTeam();
     this.bridge.onParty = (mons) => this.#onOwnParty(mons);
     this.bridge.onLog = (text) => this.#debugLog(text);
     const resetBtn = this.$('#btn-reset-storage');
@@ -154,7 +158,16 @@ export class UI {
         tr.textContent = 'trade';
         tr.dataset.action = 'trade';
         tr.onclick = () => this.#openTradeEditor(slot);
-        actions.append(tp, pvp, tr);
+        const inv = document.createElement('button');
+        inv.textContent = 'team';
+        inv.dataset.action = 'team-invite';
+        inv.onclick = () => {
+          // First invite also creates the team (create is idempotent).
+          this.socket.send({ t: 'team.create' });
+          this.socket.send({ t: 'team.invite', to: slot });
+          this.log('team', `team invite sent to ${p.name}`);
+        };
+        actions.append(tp, pvp, tr, inv);
         li.append(actions);
       }
       ul.append(li);
@@ -231,11 +244,26 @@ export class UI {
     s.on('battle.offer', (m) => this.#showOffer(m));
     s.on('battle.start', (m) => {
       this.log('battle.start', `battle ${m.sid} started · seed ${m.seed >>> 0} · order [${m.order.join(',')}] · ${m.mode}`);
-      this.$('#btn-end-battle').hidden = m.order?.[0] !== this.slot;
+      const reporter = m.mode === 'team' ? m.init : m.order?.[0];
+      this.$('#btn-end-battle').hidden = reporter !== this.slot;
+      if (m.mode === 'team') {
+        // Arm the spectator veil: turn 0 belongs to the encounter's initiator.
+        this.teamBattle = { sid: m.sid };
+        this.#setVeil(m.init !== this.slot, m.init);
+      }
+    });
+    s.on('battle.turn', (m) => {
+      if (this.teamBattle?.sid !== m.sid) return;
+      this.#setVeil(m.controller !== this.slot, m.controller);
+      this.log('battle.turn', `turn ${m.turn}: P${m.controller + 1} is choosing`);
     });
     s.on('battle.end', (m) => {
       this.log('battle.end', `battle ${m.sid} ended · result ${m.result}`);
       this.$('#btn-end-battle').hidden = true;
+      if (this.teamBattle?.sid === m.sid) {
+        this.teamBattle = null;
+        this.#setVeil(false);
+      }
     });
     s.on('warp', (m) => this.log('warp', `warped to map ${m.g}.${m.n} (${m.x},${m.y})`));
     s.on('pvp.req', (m) => this.#showPvpChallenge(m));
@@ -260,6 +288,34 @@ export class UI {
     s.on('trade.done', (m) => {
       this.#toast(m.ok ? `✅ trade complete — ${m.summary ?? ''}` : `⚠️ trade failed — ${m.msg ?? ''}`, { ttl: 8000 });
       this.log('trade', m.ok ? `trade complete: ${m.summary ?? ''}` : `trade failed: ${m.msg ?? ''}`);
+    });
+    s.on('team.req', (m) => {
+      this.log('team', `${m.name} invited you to their team`);
+      this.#toast(`👥 ${m.name} invited you to a team`, {
+        ttl: 115_000, // just under the server's invite TTL
+        action: 'team-accept',
+        label: 'Accept',
+        onAction: () => this.socket.send({ t: 'team.accept', from: m.from }),
+      });
+    });
+    s.on('team.update', (m) => {
+      this.team = m;
+      this.#renderTeamPanel();
+      if (!this.$('#team-modal').hidden) this.#renderTeamBuilder();
+    });
+    s.on('team.left', (m) => {
+      if (m.declined) {
+        this.log('team', `P${m.slot + 1} declined the team invite`);
+        return;
+      }
+      if (m.disbanded || m.slot === this.slot) {
+        this.team = null;
+        this.teamPicks = null;
+        this.$('#team-modal').hidden = true;
+        this.#toast(m.disbanded ? '👥 the team was disbanded' : '👥 you left the team', { ttl: 6000 });
+      }
+      this.log('team', m.disbanded ? 'team disbanded' : `P${m.slot + 1} left the team`);
+      this.#renderTeamPanel();
     });
     s.on('admin', (m) => this.log('admin', this.#adminText(m)));
     s.on('error', (m) => this.log('error', m.msg));
@@ -580,6 +636,136 @@ export class UI {
       st().wantItems.push({ id, qty });
       this.$('#trade-want-item').value = '';
       this.#renderTradeEdit();
+    };
+  }
+
+  // ---- team battles (docs/plans/TEAM-BATTLES.md §8) --------------------------
+
+  /** The pale-grey tint over the shared battle while it's not your turn. */
+  #setVeil(on, controller = null) {
+    const veil = this.$('#battle-turn-veil');
+    veil.hidden = !on;
+    if (on && controller !== null) {
+      const name = this.players.get(controller)?.name ?? `P${controller + 1}`;
+      this.$('#veil-msg').textContent = `${name} is choosing…`;
+    }
+  }
+
+  #renderTeamPanel() {
+    const none = this.$('#team-none');
+    const ul = this.$('#team-members');
+    const actions = this.$('#team-actions');
+    if (!none) return; // panel absent (old markup)
+    ul.innerHTML = '';
+    const has = Boolean(this.team);
+    none.hidden = has;
+    actions.hidden = !has;
+    if (!has) return;
+    for (const m of this.team.members) {
+      const li = document.createElement('li');
+      const name = document.createElement('span');
+      name.textContent = `${m.name}${m.slot === this.slot ? ' (you)' : ''}`;
+      li.append(name);
+      if (m.slot === this.team.leader) {
+        const lead = document.createElement('span');
+        lead.className = 'lead';
+        lead.textContent = 'leader';
+        li.append(lead);
+      }
+      const picks = document.createElement('span');
+      picks.className = 'dur';
+      picks.textContent = m.picks?.length
+        ? `line-up: ${m.picks.map((i) => i + 1).join(',')}`
+        : 'line-up: auto (top 3)';
+      li.append(picks);
+      ul.append(li);
+    }
+  }
+
+  /** Interleaved A1,B1,(C1),A2,… preview — mirrors merge.js mergeLineupWire. */
+  #mergedPreview() {
+    if (!this.team) return [];
+    const rows = this.team.members.map((m) => {
+      const picks = (m.slot === this.slot ? this.teamPicks : m.picks) ?? null;
+      const order = picks?.length
+        ? picks
+        : (m.party ?? []).map((mon, idx) => ({ idx, lv: mon.lv }))
+          .sort((a, b) => b.lv - a.lv || a.idx - b.idx).slice(0, 3).map((x) => x.idx);
+      return { m, order: order.filter((i) => m.party?.[i]).slice(0, 3) };
+    });
+    const merged = [];
+    for (let rank = 0; rank < 3; rank++) {
+      for (const { m, order } of rows) {
+        if (order[rank] !== undefined) merged.push({ owner: m, mon: m.party[order[rank]] });
+      }
+    }
+    return merged.slice(0, 6);
+  }
+
+  #renderTeamBuilder() {
+    if (!this.team) return;
+    if (!this.teamPicks) {
+      this.teamPicks = [...(this.team.members.find((m) => m.slot === this.slot)?.picks ?? [])];
+    }
+    const rows = this.$('#team-rows');
+    rows.innerHTML = '';
+    for (const m of this.team.members) {
+      const row = document.createElement('div');
+      row.className = 'team-row';
+      const who = document.createElement('span');
+      who.className = 'who';
+      who.textContent = `${m.name}${m.slot === this.slot ? ' (you — tap to pick)' : ''}`;
+      row.append(who);
+      const picksBox = document.createElement('div');
+      picksBox.className = 'trade-picks';
+      const mine = m.slot === this.slot;
+      const activePicks = mine ? this.teamPicks : (m.picks ?? []);
+      (m.party ?? []).forEach((mon, idx) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        const rank = activePicks.indexOf(idx);
+        b.textContent = `${rank >= 0 ? `${rank + 1}· ` : ''}#${mon.sp} lv${mon.lv}`;
+        b.dataset.idx = idx;
+        b.disabled = !mine;
+        b.classList.toggle('sel', rank >= 0);
+        if (mine) {
+          b.onclick = () => {
+            const at = this.teamPicks.indexOf(idx);
+            if (at >= 0) this.teamPicks.splice(at, 1);
+            else if (this.teamPicks.length < 3) this.teamPicks.push(idx);
+            this.#renderTeamBuilder();
+          };
+        }
+        picksBox.append(b);
+      });
+      row.append(picksBox);
+      rows.append(row);
+    }
+    const mergedUl = this.$('#team-merged');
+    mergedUl.innerHTML = '';
+    for (const { owner, mon } of this.#mergedPreview()) {
+      const li = document.createElement('li');
+      li.textContent = `${owner.name}: #${mon.sp} lv${mon.lv}`;
+      mergedUl.append(li);
+    }
+  }
+
+  #wireTeam() {
+    const builderBtn = this.$('#btn-team-builder');
+    if (!builderBtn) return; // markup absent
+    builderBtn.onclick = () => {
+      this.teamPicks = null; // refresh from the latest team.update
+      this.#renderTeamBuilder();
+      this.$('#team-modal').hidden = false;
+    };
+    this.$('#btn-team-leave').onclick = () => this.socket.send({ t: 'team.leave' });
+    this.$('#team-save').onclick = () => {
+      this.socket.send({ t: 'team.lineup', picks: this.teamPicks ?? [] });
+      this.$('#team-modal').hidden = true;
+      this.log('team', 'line-up saved');
+    };
+    this.$('#team-close').onclick = () => {
+      this.$('#team-modal').hidden = true;
     };
   }
 

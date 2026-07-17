@@ -8,10 +8,17 @@ const CLIENT_MESSAGES = {
   var: ['id', 'v'],
   party: [],
   'party.full': [],
-  'battle.open': ['kind', 'opp'],
+  'battle.open': ['kind', 'opp'], // enemy?: [32 ints] — validated in the handler
   'battle.join': [],
   'battle.input': ['turn', 'a'],
   'battle.end': ['result'],
+  'battle.turn.begin': ['turn'], // sid string — session lookup in the handler
+  'team.create': [],
+  'team.invite': ['to'],
+  'team.accept': ['from'],
+  'team.reject': ['from'],
+  'team.leave': [],
+  'team.lineup': [], // picks: int[] — validated in the handler
   tp: ['to'],
   'tp.accept': ['from'],
   pvp: ['to'],
