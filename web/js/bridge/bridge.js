@@ -239,8 +239,12 @@ export class Bridge {
     const grab = ({ ptr, size }) => {
       const at = heapOf(ptr);
       if (size === 0 || size > 0x9000 || at < 0 || at + size > mem.length) return null;
-      return mem.slice(at, at + size);
+      return mem.slice(at, at + size); // copy now: this is the consistent view
     };
+    // The slice/copy is the only part that must run inside the frame callback
+    // (it's a between-frames snapshot). base64 + JSON + the WebSocket send are
+    // deferred to a macrotask so they never stall the emulator's main loop —
+    // that per-frame stall was the ~10s gameplay hitch.
     const sb2 = grab(info.sb2);
     const sb1 = grab(info.sb1);
     const sto = grab(info.sto);
@@ -248,15 +252,18 @@ export class Bridge {
       this.onLog('save sync skipped: block out of range');
       return;
     }
-    this.#socket.send({
-      t: 'save.blocks',
-      counter: info.counter,
-      sector: info.sector,
-      sb2: b64(sb2),
-      sb1: b64(sb1),
-      sto: b64(sto),
-    });
-    this.onLog(`save sync → server (counter ${info.counter})`);
+    const { counter, sector } = info;
+    setTimeout(() => {
+      this.#socket.send({
+        t: 'save.blocks',
+        counter,
+        sector,
+        sb2: b64(sb2),
+        sb1: b64(sb1),
+        sto: b64(sto),
+      });
+      this.onLog(`save sync → server (counter ${counter})`);
+    }, 0);
   }
 }
 
