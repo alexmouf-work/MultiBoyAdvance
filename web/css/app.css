@@ -460,12 +460,14 @@ button.ghost { background: transparent; }
 /* ============ touch controls ============ */
 /* --ps scales every pad dimension (the "Size" slider writes it). */
 #touch {
-  --ps: 1;
+  --ps: 1;   /* Size slider (inline) */
+  --pfit: 1;  /* per-mode fit, set below so controls never spill */
+  --s: calc(var(--ps) * var(--pfit));
   display: none; /* enabled on touch devices / fullscreen via JS class */
   position: relative;
   width: 100%;
   max-width: 900px;
-  min-height: calc(240px * var(--ps));
+  min-height: calc(240px * var(--s));
 }
 body.touch #touch { display: block; }
 
@@ -526,33 +528,33 @@ body.touch #gamewrap:not(.controls-below) #stick-base {
   bottom: 10px;
   display: flex;
   flex-direction: column;
-  gap: calc(10px * var(--ps));
+  gap: calc(10px * var(--s));
 }
 #left-cluster { left: 10px; align-items: flex-start; }
 #right-cluster { right: 10px; align-items: flex-end; }
 .pad.shoulder {
   position: static;
-  width: calc(58px * var(--ps));
-  height: calc(38px * var(--ps));
+  width: calc(58px * var(--s));
+  height: calc(38px * var(--s));
   border-radius: 10px;
-  font-size: calc(14px * var(--ps));
+  font-size: calc(14px * var(--s));
 }
 
 /* Movement box matches the diamond box (196×196·ps) so the joystick/D-pad and
    the button diamond sit at the same height, mirrored left/right — and the
    L/R shoulders above them line up too. */
-#dpad { position: relative; width: calc(196px * var(--ps)); height: calc(196px * var(--ps)); }
-#dpad .pad { width: calc(56px * var(--ps)); height: calc(56px * var(--ps)); font-size: calc(18px * var(--ps)); }
-#dpad .up    { left: calc(70px * var(--ps)); top: calc(14px * var(--ps)); }
-#dpad .down  { left: calc(70px * var(--ps)); bottom: calc(14px * var(--ps)); }
-#dpad .left  { left: calc(14px * var(--ps)); top: calc(70px * var(--ps)); }
-#dpad .right { right: calc(14px * var(--ps)); top: calc(70px * var(--ps)); }
+#dpad { position: relative; width: calc(196px * var(--s)); height: calc(196px * var(--s)); }
+#dpad .pad { width: calc(56px * var(--s)); height: calc(56px * var(--s)); font-size: calc(18px * var(--s)); }
+#dpad .up    { left: calc(70px * var(--s)); top: calc(14px * var(--s)); }
+#dpad .down  { left: calc(70px * var(--s)); bottom: calc(14px * var(--s)); }
+#dpad .left  { left: calc(14px * var(--s)); top: calc(70px * var(--s)); }
+#dpad .right { right: calc(14px * var(--s)); top: calc(70px * var(--s)); }
 
 /* joystick mode replaces the d-pad in place (same outer box, stick centered) */
 #joystick {
   position: relative;
-  width: calc(196px * var(--ps));
-  height: calc(196px * var(--ps));
+  width: calc(196px * var(--s));
+  height: calc(196px * var(--s));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -560,8 +562,8 @@ body.touch #gamewrap:not(.controls-below) #stick-base {
 #joystick[hidden] { display: none; }
 #stick-base {
   position: relative;
-  width: calc(150px * var(--ps));
-  height: calc(150px * var(--ps));
+  width: calc(150px * var(--s));
+  height: calc(150px * var(--s));
   border-radius: 50%;
   border: 4px solid rgba(255, 255, 255, 0.92);
   background: rgba(6, 9, 14, 0.9);
@@ -574,9 +576,9 @@ body.touch #gamewrap:not(.controls-below) #stick-base {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: calc(62px * var(--ps));
-  height: calc(62px * var(--ps));
-  margin: calc(-31px * var(--ps)) 0 0 calc(-31px * var(--ps));
+  width: calc(62px * var(--s));
+  height: calc(62px * var(--s));
+  margin: calc(-31px * var(--s)) 0 0 calc(-31px * var(--s));
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.5);
   border: 4px solid rgba(255, 255, 255, 0.92);
@@ -587,13 +589,13 @@ body.touch #gamewrap:not(.controls-below) #stick-base {
 #stick-base.live #stick-knob { background: var(--accent); }
 
 /* A/B/Start/Select in a 4-point diamond: START top, SELECT left, A right, B bottom */
-#diamond { position: relative; width: calc(196px * var(--ps)); height: calc(196px * var(--ps)); }
-#diamond .a, #diamond .b { width: calc(64px * var(--ps)); height: calc(64px * var(--ps)); font-size: calc(20px * var(--ps)); }
-#diamond .small { width: calc(52px * var(--ps)); height: calc(52px * var(--ps)); font-size: calc(8.5px * var(--ps)); letter-spacing: 0.02em; }
-#diamond .start  { top: 0; left: 50%; margin-left: calc(-26px * var(--ps)); }
-#diamond .select { left: 0; top: 50%; margin-top: calc(-26px * var(--ps)); }
-#diamond .a { right: 0; top: 50%; margin-top: calc(-32px * var(--ps)); }
-#diamond .b { bottom: 0; left: 50%; margin-left: calc(-32px * var(--ps)); }
+#diamond { position: relative; width: calc(196px * var(--s)); height: calc(196px * var(--s)); }
+#diamond .a, #diamond .b { width: calc(64px * var(--s)); height: calc(64px * var(--s)); font-size: calc(20px * var(--s)); }
+#diamond .small { width: calc(52px * var(--s)); height: calc(52px * var(--s)); font-size: calc(8.5px * var(--s)); letter-spacing: 0.02em; }
+#diamond .start  { top: 0; left: 50%; margin-left: calc(-26px * var(--s)); }
+#diamond .select { left: 0; top: 50%; margin-top: calc(-26px * var(--s)); }
+#diamond .a { right: 0; top: 50%; margin-top: calc(-32px * var(--s)); }
+#diamond .b { bottom: 0; left: 50%; margin-left: calc(-32px * var(--s)); }
 
 #pad-prefs { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 #pad-prefs .pref { display: flex; align-items: center; gap: 6px; }
@@ -716,26 +718,31 @@ body.touch #gamewrap:not(.controls-below) #stick-base {
 }
 
 /* ============ mobile layouts ============ */
-/* Overlay mode on a phone = immersive: the game fills the whole screen and the
-   pads float on top. In portrait we rotate the frame 90° so the landscape game
-   is large (tilt the phone into landscape to play). Below mode stays windowed. */
-body.touch #gamewrap.mobile-overlay {
+/* On phones BOTH pad modes are immersive — the game frame fills the screen (no
+   header/title, no page scroll). Overlay floats the pads on the game (rotated
+   to landscape in portrait so it's large); below stacks the game over a pad
+   strip. --pfit shrinks the pads per mode so they never spill off the edges. */
+body.touch #gamewrap.mobile-overlay,
+body.touch #gamewrap.controls-below {
   position: fixed;
   inset: 0;
   z-index: 50;
   max-width: none;
   margin: 0;
   background: #000;
+}
+/* keep the sidebar (console / players / debug) reachable above the game */
+body.touch #sidebar { z-index: 60; }
+
+/* ---- overlay: game fills, pads float on top ---- */
+body.touch #gamewrap.mobile-overlay {
   display: flex;
   align-items: center;
   justify-content: center;
 }
-body.touch #gamewrap.mobile-overlay #screen {
-  width: min(100vw, 150vh);
-  border: none;
-  border-radius: 0;
-}
+body.touch #gamewrap.mobile-overlay #screen { width: min(100vw, 150vh); border: none; border-radius: 0; }
 body.touch #gamewrap.mobile-overlay #touch {
+  --pfit: 0.8;
   position: absolute;
   inset: 0;
   max-width: none;
@@ -745,43 +752,63 @@ body.touch #gamewrap.mobile-overlay #touch {
 }
 body.touch #gamewrap.mobile-overlay .pad,
 body.touch #gamewrap.mobile-overlay #stick-base { pointer-events: auto; }
-body.touch #gamewrap.mobile-overlay #left-cluster { left: 20px; bottom: 20px; }
-body.touch #gamewrap.mobile-overlay #right-cluster { right: 20px; bottom: 20px; }
+body.touch #gamewrap.mobile-overlay #left-cluster {
+  left: max(24px, env(safe-area-inset-left));
+  bottom: max(24px, env(safe-area-inset-bottom));
+}
+body.touch #gamewrap.mobile-overlay #right-cluster {
+  right: max(24px, env(safe-area-inset-right));
+  bottom: max(24px, env(safe-area-inset-bottom));
+}
+
+/* ---- below: game centered (with breathing room above), pads anchored to the
+   bottom for thumb reach ---- */
+body.touch #gamewrap.controls-below {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+body.touch #gamewrap.controls-below #screen {
+  width: 100vw;
+  max-height: 62vh;
+  border: none;
+  border-radius: 0;
+  margin-bottom: 8vh; /* nudge the game up so it clears the bottom pad strip */
+}
+body.touch #gamewrap.controls-below #touch {
+  --pfit: 0.8;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: max(16px, env(safe-area-inset-bottom));
+  max-width: none;
+  min-height: 0;
+  padding: 0 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+body.touch #gamewrap.controls-below #left-cluster,
+body.touch #gamewrap.controls-below #right-cluster { position: static; }
 
 @media (orientation: portrait) {
-  /* rotate the immersive frame into landscape and fill the viewport */
+  /* rotate the overlay frame into landscape and fill the viewport. dvh/dvw
+     (dynamic viewport) track Safari's collapsing URL bar so the rotated frame
+     stays aligned; static vh/vw would leave a gap when the bar hides. */
   body.touch #gamewrap.mobile-overlay {
     inset: auto;
     top: 0;
     left: 0;
-    width: 100vh;
-    height: 100vw;
+    width: 100dvh;
+    height: 100dvw;
     transform-origin: top left;
-    transform: translateX(100vw) rotate(90deg);
+    transform: translateX(100dvw) rotate(90deg);
   }
-  body.touch #gamewrap.mobile-overlay #screen {
-    width: min(100vh, 150vw);
-  }
-
-  /* Below mode, windowed: hide the big page title, top-align, let the game use
-     the full width with the pads packed directly beneath — no weird letterbox,
-     no stretch (the 3:2 aspect-ratio is preserved). */
-  body.touch #stage { padding: 6px 0 20px; }
+  body.touch #gamewrap.mobile-overlay #screen { width: min(100dvh, 150dvw); }
   body.touch #title { display: none; }
-  body.touch #main { gap: 8px; }
-  body.touch #gamewrap.controls-below { gap: 6px; }
-  body.touch #gamewrap.controls-below #screen { width: 100vw; border-radius: 0; }
-
-  /* Two 196px pad clusters don't fit a phone's width — scale the whole strip
-     down so nothing is cut off (the rotated overlay has room; this windowed
-     strip does not). The Size slider still scales on top of this. */
-  body.touch #gamewrap.controls-below #touch {
-    transform: scale(0.8);
-    transform-origin: top center;
-    min-height: calc(200px * var(--ps));
-  }
 }
 /* roomier portrait tablets can show the pads full size */
-@media (orientation: portrait) and (min-width: 560px) {
-  body.touch #gamewrap.controls-below #touch { transform: none; }
+@media (orientation: portrait) and (min-width: 620px) {
+  body.touch #gamewrap.mobile-overlay #touch,
+  body.touch #gamewrap.controls-below #touch { --pfit: 1; }
 }
