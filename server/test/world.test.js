@@ -217,24 +217,24 @@ test('trade.give moves items between bags; starter kit guards double-grants', ()
   world.handle(a.client, { t: 'trade.give', to: 0, item: 13, qty: 2 }); // self
   assert.equal(msgs(a.inbox, 'error').length, 1);
 
-  world.handle(b.client, { t: 'starter', species: 258 });
+  world.handle(b.client, { t: 'starter', species: 283 }); // Mudkip (internal order)
   const admins = msgs(b.inbox, 'admin');
-  assert.deepEqual(admins[1], { t: 'admin', sub: 'give_mon', species: 258, level: 5 });
+  assert.deepEqual(admins[1], { t: 'admin', sub: 'give_mon', species: 283, level: 5 });
   assert.equal(admins[2].sub, 'give_item'); // poké balls
   assert.equal(admins[3].sub, 'give_item'); // potions
 
-  world.handle(b.client, { t: 'starter', species: 252 }); // double-click: ignored
+  world.handle(b.client, { t: 'starter', species: 277 }); // double-click: ignored
   assert.equal(msgs(b.inbox, 'admin').length, 4);
 
   // a grant that never landed (party still empty) is retryable after cooldown
   b.client.starterAt = Date.now() - 11_000;
-  world.handle(b.client, { t: 'starter', species: 252 });
+  world.handle(b.client, { t: 'starter', species: 277 });
   assert.equal(msgs(b.inbox, 'admin').length, 7, 'empty party after cooldown → regrant');
 
   // but once a party exists, no more starters, ever
   b.client.starterAt = Date.now() - 11_000;
-  world.handle(b.client, { t: 'party', mons: [{ sp: 258, lv: 5, hp: 100 }] });
-  world.handle(b.client, { t: 'starter', species: 252 });
+  world.handle(b.client, { t: 'party', mons: [{ sp: 283, lv: 5, hp: 100 }] });
+  world.handle(b.client, { t: 'starter', species: 277 });
   assert.equal(msgs(b.inbox, 'admin').length, 7);
 
   world.handle(a.client, { t: 'starter', species: 999 }); // not a starter

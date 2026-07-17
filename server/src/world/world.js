@@ -14,8 +14,10 @@ import { forgeSave, FLASH_SIZE, SECTOR_DATA_SIZE } from '../saveforge.js';
 const DESPAWN_STATE = 255;
 const TP_REQUEST_TTL_MS = 60_000;
 
-// Hoenn starters + the kit every new player gets alongside one.
-const STARTER_SPECIES = new Set([252, 255, 258]); // Treecko, Torchic, Mudkip
+// Hoenn starters + the kit every new player gets alongside one. These are the
+// ROM's INTERNAL Hoenn species order (pokeemerald constants), NOT National Dex
+// numbers — sending 252/255/258 lands on unused "??" placeholder slots.
+const STARTER_SPECIES = new Set([277, 280, 283]); // Treecko, Torchic, Mudkip
 const STARTER_RETRY_MS = 10_000;
 const ITEM_POKE_BALL = 4;
 const ITEM_POTION = 13;

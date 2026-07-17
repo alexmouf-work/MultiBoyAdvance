@@ -2,9 +2,17 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <title>MultiBoyAdvance — shared-world multiplayer Pokémon</title>
+
+  <!-- installable web app (Add to Home Screen → standalone, no browser chrome) -->
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="MultiBoyAdvance" />
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
 
   <!-- SEO / indexing -->
   <meta name="description" content="MultiBoyAdvance is a shared-world multiplayer Pokémon game played in the browser — everyone explores one Hoenn together, sees each other, and battles co-op. No downloads." />
@@ -104,10 +112,13 @@
         <div class="starter-card">
           <h2>Choose your starter</h2>
           <p>Every trainer sets out with one — plus 5 Poké Balls and 3 Potions.</p>
+          <!-- species IDs are the ROM's INTERNAL Hoenn order (pokeemerald
+               constants: TREECKO 277, TORCHIC 280, MUDKIP 283) — NOT National
+               Dex numbers, or the game shows a "??" placeholder mon. -->
           <div class="starter-row">
-            <button data-species="252">🌿 Treecko</button>
-            <button data-species="255">🔥 Torchic</button>
-            <button data-species="258">💧 Mudkip</button>
+            <button data-species="277">🌿 Treecko</button>
+            <button data-species="280">🔥 Torchic</button>
+            <button data-species="283">💧 Mudkip</button>
           </div>
         </div>
       </div>

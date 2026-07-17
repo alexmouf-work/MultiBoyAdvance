@@ -183,6 +183,29 @@ test('lanUrls ranks real LAN IPs above virtual adapters', async () => {
   }
 });
 
+test('PWA manifest + icons serve so the app is installable', async () => {
+  const srv = createServers(testCfg());
+  await new Promise((r) => srv.httpServer.listen(0, '127.0.0.1', r));
+  const port = srv.httpServer.address().port;
+
+  const mani = await fetch(`http://127.0.0.1:${port}/manifest.webmanifest`);
+  assert.equal(mani.status, 200);
+  assert.match(mani.headers.get('content-type'), /manifest\+json/);
+  const body = await mani.json();
+  assert.equal(body.display, 'standalone');
+  assert.ok(body.icons.some((i) => i.purpose === 'maskable'), 'has a maskable icon');
+
+  for (const icon of ['icon-192.png', 'icon-512.png', 'apple-touch-icon.png']) {
+    const res = await fetch(`http://127.0.0.1:${port}/icons/${icon}`);
+    assert.equal(res.status, 200, icon);
+    assert.match(res.headers.get('content-type'), /image\/png/);
+  }
+  const head = await (await fetch(`http://127.0.0.1:${port}/index.html`)).text();
+  assert.match(head, /rel="manifest"/);
+  assert.match(head, /apple-touch-icon/);
+  srv.close();
+});
+
 test('robots.txt and sitemap.xml serve for search-engine indexing', async () => {
   const srv = createServers(testCfg());
   await new Promise((r) => srv.httpServer.listen(0, '127.0.0.1', r));
