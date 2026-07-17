@@ -51,6 +51,7 @@ enum {
 
 struct Pokemon { u8 raw[100]; };
 extern struct Pokemon gPlayerParty[PARTY_SIZE];
+extern struct Pokemon gEnemyParty[PARTY_SIZE];
 
 struct SpeciesInfo { u8 growthRate; };
 extern const struct SpeciesInfo gSpeciesInfo[];

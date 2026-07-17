@@ -78,12 +78,21 @@ enum {
     NET_REQ_RESYNC = 4,     // arg unused — replay world flags/vars + identity
 };
 
-// battle sub-messages
+// battle sub-messages (sub 4 differs by direction: PARTY on BATTLE_CMD
+// host->game, TURN_BEGIN on BATTLE_EVENT game->host)
 enum {
-    NET_BSUB_START_OR_ENCOUNTER = 1,
+    NET_BSUB_START_OR_ENCOUNTER = 1, // ENCOUNTER may append one enemy wire mon (team)
     NET_BSUB_TURN_INPUT = 2,
     NET_BSUB_END_OR_OUTCOME = 3,
-    NET_BSUB_PARTY = 4, // host->game only: count u8, wire mons (sent before START)
+    NET_BSUB_PARTY = 4,      // host->game only: count u8, wire mons (sent before START)
+    NET_BSUB_TURN_BEGIN = 4, // game->host only: turn u8, controller u8 (team mode)
+};
+
+// BATTLE_CMD START mode byte
+enum {
+    NET_BMODE_COOP = 0,
+    NET_BMODE_PVP = 1,
+    NET_BMODE_TEAM = 2, // extended START: init u8, enemyCount u8, wire mons
 };
 
 struct NetRing

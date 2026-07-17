@@ -1,6 +1,16 @@
 # Build plan — Team (co-op) battles
 
-Status: **design complete, unbuilt.** Author: planning session (Opus). Builder: Claude Fable.
+Status: **T1 + T2 BUILT** (teams, invites, line-up builder, shared team
+session with enemy transfer + interleaved lineup, controller rotation, and the
+grey spectator veil — all e2e-tested in demo mode). **T2.5 groundwork BUILT
+but UNVERIFIED on a real ROM**: the overlay now ships the exact enemy wire mon
+with wild encounters, parses the extended team START (init + enemy), queues
+peer battle entry via the scripted-wild path, and reports TURN_BEGIN — but
+input gating/injection (§7.2/§7.4, the battle-controller hooks) is NOT built,
+so on real ROMs both players' inputs still drive their own battles: the veil
+discourages out-of-turn input, the ROM does not yet enforce or replay it.
+T2.5 ships only after the plan's §11 two-instance determinism test passes on
+the host. Author: planning session (Opus). Builder: Claude Fable.
 Companion: `docs/plans/TRADING.md`. Normative protocol: `docs/PROTOCOL.md`.
 Roadmap: this is the completion + extension of **Phase 3 (co-op battles)**.
 

@@ -1,6 +1,9 @@
 # Build plan — Player-to-player trading
 
-Status: **design complete, unbuilt.** Author: planning session (Opus). Builder: Claude Fable.
+Status: **BUILT** (v1 as specced: offer/accept/counter/reject, trade GUI,
+PC overflow, /trade console path; §12 enhancements remain open). ROM side
+compiles against the stubs — takes effect after the next host ROM rebuild.
+Author: planning session (Opus). Builder: Claude Fable.
 Companion: `docs/plans/TEAM-BATTLES.md`. Normative protocol: `docs/PROTOCOL.md`.
 
 This plan is written to be built top-to-bottom. It names exact files, functions,

@@ -13,10 +13,13 @@
 #include "global.h"
 #include "battle.h"
 #include "battle_anim.h" // GetBattlerSide
+#include "battle_setup.h" // BattleSetup_StartScriptedWildBattle (team peer entry)
 #include "main.h"
 #include "overworld.h"
 #include "pokemon.h"
 #include "random.h"
+#include "script.h" // ArePlayerFieldControlsLocked
+#include "script_pokemon_util.h" // CreateScriptedWildMon
 #include "net/mailbox.h"
 #include "net/net.h"
 
@@ -26,11 +29,20 @@ struct NetBattleSession
     u32 seed;
     u8 playerCount;
     u8 order[4];
-    u8 mode; // 0=coop 1=pvp
+    u8 mode; // NET_BMODE_*
     u8 turnNo;
+    u8 init; // team: slot whose encounter opened the battle (turn 0's controller)
 };
 
 static struct NetBattleSession sSession;
+
+// Team mode (docs/plans/TEAM-BATTLES.md T2.5): whether THIS game opened the
+// encounter, the enemy shipped in the extended START, and a queued peer entry
+// (applied only from a quiet overworld frame, like every world mutation).
+static bool8 sIsInitiator;
+static EWRAM_DATA u8 sEnemyWire[NET_MON_WIRE_SIZE] = {0};
+static bool8 sHaveEnemy;
+static bool8 sPendingPeerEntry;
 
 // Merged party staged by BATTLE_CMD PARTY, applied at START, undone at END.
 static EWRAM_DATA u8 sPendingParty[1 + PARTY_SIZE * NET_MON_WIRE_SIZE] = {0};
@@ -61,7 +73,8 @@ static void WR_U32(u8 *p, u32 i, u32 v)
 
 void NetOnBattleOpen(u8 kind, u16 opponent)
 {
-    u8 p[4];
+    u8 p[4 + NET_MON_WIRE_SIZE];
+    u8 len = 4;
 
     if (!NetIsOnline())
         return;
@@ -69,7 +82,15 @@ void NetOnBattleOpen(u8 kind, u16 opponent)
     p[1] = kind;
     p[2] = opponent & 0xFF;
     p[3] = opponent >> 8;
-    NetOutWrite(NET_MSG_BATTLE_EVENT, p, 4);
+    // Wild encounters ship the EXACT enemy so team peers can enter the
+    // identical battle (each ROM rolling its own would desync instantly).
+    if (kind == 0 && GetMonData(&gEnemyParty[0], MON_DATA_SPECIES, NULL) != SPECIES_NONE)
+    {
+        MonToWire(&gEnemyParty[0], &p[4]);
+        len += NET_MON_WIRE_SIZE;
+    }
+    sIsInitiator = TRUE; // this game's own battle is already starting
+    NetOutWrite(NET_MSG_BATTLE_EVENT, p, len);
 }
 
 // ---- 32-byte wire-mon codec (layout: mailbox.h / docs/PROTOCOL.md §1.5) ----
@@ -290,6 +311,69 @@ void NetOnTurnFinalized(void)
         p[6] = gChosenMoveByBattler[i] >> 8;
         NetOutWrite(NET_MSG_BATTLE_EVENT, p, 7);
     }
+
+    // Team mode: the previous turn's choices are locked, so the NEXT turn's
+    // selection is about to begin — announce it (drives the spectator veil).
+    NetTeamEmitTurnBegin();
+}
+
+// ---- team battles (T2.5 groundwork; docs/plans/TEAM-BATTLES.md §7) ----------
+
+/** Whose choice drives this turn: rotate from the initiator through the team
+ *  order — turn 0 = the member who hit the encounter. */
+static u8 NetTeamControllerFor(u8 turn)
+{
+    u8 initIdx = 0;
+    u8 i;
+
+    if (sSession.playerCount == 0)
+        return sSession.init;
+    for (i = 0; i < sSession.playerCount && i < 4; i++)
+        if (sSession.order[i] == sSession.init)
+            initIdx = i;
+    return sSession.order[(initIdx + turn) % sSession.playerCount];
+}
+
+/** Report the current turn's selection start (BATTLE_EVENT sub 4). The server
+ *  dedupes per (sid, turn) across participants and fans out battle.turn, which
+ *  drives the web spectator veil ("P2 is choosing…"). */
+void NetTeamEmitTurnBegin(void)
+{
+    u8 p[3];
+
+    if (!sSession.active || sSession.mode != NET_BMODE_TEAM || !NetIsOnline())
+        return;
+    p[0] = NET_BSUB_TURN_BEGIN;
+    p[1] = sSession.turnNo;
+    p[2] = NetTeamControllerFor(sSession.turnNo);
+    NetOutWrite(NET_MSG_BATTLE_EVENT, p, 3);
+}
+
+// Called once per frame from NetTick: a team member who did not open the
+// encounter enters the identical battle — same enemy (shipped wire mon), same
+// merged party (injected at START), same seed. Entry uses the scripted-wild
+// path the WILD_BATTLE admin command already uses, then overwrites the rolled
+// enemy with the exact wire bytes before the engine reads it.
+//
+// VERIFY-ON-HOST: peer entry + mid-intro party injection need a real
+// two-instance ROM test (plan §11) before T2.5 is called done.
+void NetTeamTick(void)
+{
+    u16 species;
+
+    if (!sPendingPeerEntry)
+        return;
+    if (gMain.callback2 != CB2_Overworld || ArePlayerFieldControlsLocked())
+        return; // same context a field script requires; retry next frame
+    sPendingPeerEntry = FALSE;
+
+    species = (u16)(sEnemyWire[8] | (sEnemyWire[9] << 8));
+    if (species == SPECIES_NONE)
+        return;
+    CreateScriptedWildMon(species, sEnemyWire[20], 0);
+    MonFromWire(sEnemyWire, &gEnemyParty[0]); // exact mon, not a fresh roll
+    NetLog("team: entering shared battle");
+    BattleSetup_StartScriptedWildBattle();
 }
 
 void NetSendBattleOutcome(u8 result)
@@ -311,7 +395,7 @@ void NetOnBattleCmd(const u8 *payload, u8 len)
 
     switch (payload[0])
     {
-    case NET_BSUB_START_OR_ENCOUNTER: // START {seed u32, count u8, order[4], mode u8}
+    case NET_BSUB_START_OR_ENCOUNTER: // START {seed u32, count u8, order[4], mode u8[, init u8, enemyCount u8, wire…]}
         if (len < 11)
             return;
         sSession.active = TRUE;
@@ -323,8 +407,24 @@ void NetOnBattleCmd(const u8 *payload, u8 len)
         sSession.order[3] = payload[9];
         sSession.mode = payload[10];
         sSession.turnNo = 0;
-        // Co-op: the merged party staged by NET_BSUB_PARTY takes the field.
-        if (sSession.mode == 0)
+        sSession.init = sSession.order[0];
+        // Team extension: the encounter opener's slot + the exact enemy.
+        if (sSession.mode == NET_BMODE_TEAM && len >= 13)
+        {
+            sSession.init = payload[11];
+            if (payload[12] >= 1 && len >= 13 + NET_MON_WIRE_SIZE)
+            {
+                memcpy(sEnemyWire, &payload[13], NET_MON_WIRE_SIZE);
+                sHaveEnemy = TRUE;
+            }
+            // A member who did NOT open the encounter must be pulled into the
+            // identical battle; queued for the next quiet overworld frame.
+            if (!sIsInitiator && sHaveEnemy)
+                sPendingPeerEntry = TRUE;
+            NetTeamEmitTurnBegin(); // turn 0: the initiator is choosing
+        }
+        // Co-op/team: the merged party staged by NET_BSUB_PARTY takes the field.
+        if (sSession.mode != NET_BMODE_PVP)
             InjectPendingParty();
         // Deterministic lockstep starts here: every participant seeds the
         // same RNG before the battle engine draws from it.
@@ -335,12 +435,17 @@ void NetOnBattleCmd(const u8 *payload, u8 len)
     case NET_BSUB_TURN_INPUT: // relayed {turn u8, fromSlot u8, action u8, move u8, tgt u8, extra u16}
         if (len < 8 || !sSession.active)
             return;
-        // Phase 3: feed into the battle controller for the acting battler.
+        // T3 (docs/plans/TEAM-BATTLES.md §7.2): feed into the battle
+        // controller for the acting battler. Until then the relay only keeps
+        // the turn counter in step.
         sSession.turnNo = payload[1];
         break;
 
     case NET_BSUB_END_OR_OUTCOME:
         sSession.active = FALSE;
+        sIsInitiator = FALSE;
+        sHaveEnemy = FALSE;
+        sPendingPeerEntry = FALSE;
         RestorePartyIfInjected();
         break;
 

@@ -32,6 +32,11 @@ void MonFromWire(const u8 *w, struct Pokemon *mon);
 void NetOnTradeDeliver(const u8 *payload, u8 len);
 void NetTradeTick(void);
 
+// Team battles (net_battle.c, T2.5 groundwork): queued peer entry into the
+// shared battle, applied on a quiet overworld frame; TURN_BEGIN reporting.
+void NetTeamTick(void);
+void NetTeamEmitTurnBegin(void);
+
 // battle_main.c hook — call at the top of
 // CheckFocusPunch_ClearVarsBeforeTurnStarts to report finalized turn choices
 // (emit-only; no effect on battle state).
