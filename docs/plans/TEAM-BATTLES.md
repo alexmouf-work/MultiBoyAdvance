@@ -38,11 +38,11 @@ Roadmap: this is the completion + extension of **Phase 3 (co-op battles)**.
 ### Scope for v1 (state plainly)
 - **Wild single battles only.** Trainer/gym battles (enemy party + AI must be
   replicated on every peer) are out of v1 — see §12.
-- **Turn-control model:** control **rotates per turn** through the team in team
-  order, starting with the encounter's initiator (A→B→C→A…), decoupled from which
-  Pokémon is currently on the field (the interleaved lineup only sets *send-out*
-  order). This is the literal reading of "players alternate turns" + "order of
-  Pokémon A1,B1,…". **Confirm this interpretation** (see §13, D-Turn).
+- **Turn-control model (CONFIRMED by owner):** control **rotates per turn**
+  through the team in team order, starting with the encounter's initiator
+  (A→B→C→A…), decoupled from which Pokémon is currently on the field (the
+  interleaved lineup only sets *send-out* order). This is the literal reading of
+  "players alternate turns" + "order of Pokémon A1,B1,…". Build to this.
 - Teams are **ephemeral** (in-memory, dissolve when the leader disconnects or
   disbands). Cross-session persistent teams are a §12 enhancement.
 
@@ -472,12 +472,11 @@ A walks into grass, hits a wild mon.
 
 ## 13. Open decisions for the owner (surface before build)
 
-- **D-Turn (most important):** confirm the control model. This plan uses
-  **rotate-control-per-turn, hotseat** (turn 0 = initiator, then A→B→C→A…,
-  decoupled from which Pokémon is active). Alternatives: **(a) control follows the
-  active Pokémon's owner** (you only ever command your own mon; control changes as
-  mons faint), or **(b) double-battle** style (each player commands their own
-  active mon every turn, simultaneously). These change §7.2/§7.4 materially.
+- **D-Turn — DECIDED (owner, 2026-07):** **rotate-control-per-turn, hotseat**
+  (turn 0 = initiator, then A→B→C→A…, decoupled from which Pokémon is active).
+  Build §7.2/§7.4 to this. (Alternatives considered and rejected: control follows
+  the active Pokémon's owner; double-battle simultaneous control. Double battles
+  remain a possible §12.2 enhancement for 2-player teams only.)
 - **D-Scope:** v1 = **wild single battles only**. OK to defer trainer/gym battles?
 - **D-Absent members:** if a team member is **offline** when the encounter fires,
   they're simply excluded from that battle (only online members participate). OK?
