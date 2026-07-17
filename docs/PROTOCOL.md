@@ -249,9 +249,20 @@ Every message has `t` (type). Server assigns each connection an integer `slot`
 ### 2.4 HTTP side-channel
 
 `GET/HEAD /rom/mba.gba` — the host's current local ROM build
-(`rom/build/mba.gba`), served `no-store` so a rebuild is picked up on the next
-join. 404 when the host hasn't built one. The build never enters the git repo;
-it exists only on the host's server.
+(`rom/build/mba.gba`). It's a big (~16 MiB) blob that's immutable until the next
+rebuild, so it's served `Cache-Control: no-cache` with a strong `ETag` (the
+build's sha256): the browser keeps it and revalidates, so an unchanged build
+answers `304` (no re-transfer) on every load while a rebuild ships a new hash →
+new ETag → a fresh `200`. `HEAD` (the join screen's readiness probe) answers
+from the file stat without reading the blob. The web client also stores the ROM
+in Cache Storage keyed by that hash (`/api/rom-info` gives it the hash), so a
+returning player boots with no ROM download at all until the host rebuilds.
+404 when the host hasn't built one. The build never enters the git repo; it
+exists only on the host's server.
+
+`GET /api/rom-info` — `{size, sha256, builtAt}` for the current build. The
+client fingerprints its download against this (stale-build / corrupt-transfer
+check) and keys its browser-side ROM cache by the `sha256`.
 
 `GET/PUT /api/save/<name>` — the trainer's game save (.sav flash image,
 ≤256 KB). Bridges PUT it after every `SAVED` report, and the server itself

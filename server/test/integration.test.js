@@ -296,12 +296,28 @@ test('/rom/mba.gba serves the host build fresh, 404s when absent', async () => {
   const head = await fetch(`http://127.0.0.1:${port}/rom/mba.gba`, { method: 'HEAD' });
   assert.equal(head.status, 200);
   const res = await fetch(`http://127.0.0.1:${port}/rom/mba.gba`);
-  assert.equal(res.headers.get('cache-control'), 'no-store');
+  // Cacheable-but-revalidated: the browser keeps the ROM and revalidates by ETag
+  // so unchanged builds cost a 304, not a full re-download, every load.
+  assert.equal(res.headers.get('cache-control'), 'no-cache');
+  const etag = res.headers.get('etag');
+  assert.ok(etag, 'the ROM carries an ETag for conditional requests');
   assert.deepEqual(new Uint8Array(await res.arrayBuffer()), Uint8Array.from([0xde, 0xad, 0xbe, 0xef]));
 
-  // "update the build on demand": a rebuild is served on the very next fetch
+  // A conditional request with the current ETag revalidates as 304 (no body).
+  const notMod = await fetch(`http://127.0.0.1:${port}/rom/mba.gba`, {
+    headers: { 'if-none-match': etag },
+  });
+  assert.equal(notMod.status, 304);
+  assert.equal((await notMod.arrayBuffer()).byteLength, 0);
+
+  // "update the build on demand": a rebuild changes the hash, so the same
+  // conditional request now misses (new ETag) and the fresh bytes are served.
   fs.writeFileSync(cfg.romFile, Buffer.from([0x01]));
-  const res2 = await fetch(`http://127.0.0.1:${port}/rom/mba.gba`);
+  const res2 = await fetch(`http://127.0.0.1:${port}/rom/mba.gba`, {
+    headers: { 'if-none-match': etag },
+  });
+  assert.equal(res2.status, 200);
+  assert.notEqual(res2.headers.get('etag'), etag, 'a rebuild yields a new ETag');
   assert.equal((await res2.arrayBuffer()).byteLength, 1);
 
   fs.rmSync(cfg.romFile);

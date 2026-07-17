@@ -8,6 +8,7 @@ import { mapName } from './data/map-names.js';
 
 const $ = (sel) => document.querySelector(sel);
 const ROM_URL = '/rom/mba.gba';
+const ROM_CACHE = 'mba-rom-v1'; // browser-side ROM store, keyed by build hash
 let joinReady = false; // ROM present + secure context
 
 // ---- join screen state -------------------------------------------------------
@@ -98,11 +99,58 @@ async function loadRoster() {
   }
 }
 
-async function fetchRomFile() {
+// The ROM is a fixed build artifact — byte-identical for every player until the
+// host rebuilds it, and fully separate from game state (that lives in the .sav).
+// So we keep it in the browser's Cache Storage keyed by its content hash: a
+// returning player boots instantly with no download, and we only re-fetch when
+// the host ships a new build (new hash). A per-session "diff" wouldn't help —
+// the ROM never changes as you play; when it does change, it's a new binary.
+async function fetchRomFile(onStatus) {
+  const info = await fetch('/api/rom-info').then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  const hash = info?.sha256 || null;
+  const cache = hash && 'caches' in window ? await caches.open(ROM_CACHE).catch(() => null) : null;
+  const key = hash ? `${ROM_URL}?v=${hash}` : null;
+
+  if (cache && key) {
+    const hit = await cache.match(key);
+    if (hit) {
+      onStatus?.('Loading the game from cache…');
+      return new File([await hit.blob()], 'mba.gba');
+    }
+  }
+
+  onStatus?.('Downloading the game…');
   const res = await fetch(ROM_URL);
   if (!res.ok) throw new Error('the server has no ROM build');
-  const blob = await res.blob();
+  const blob = await readBlobWithProgress(res, info?.size, onStatus);
+
+  if (cache && key) {
+    try {
+      await cache.put(key, new Response(blob, { headers: { 'content-type': 'application/octet-stream' } }));
+      // Only the current build is worth keeping — evict any older cached ROMs.
+      const keep = new Request(key).url;
+      for (const req of await cache.keys()) if (req.url !== keep) await cache.delete(req);
+    } catch { /* caching is a nicety; a boot never depends on it */ }
+  }
   return new File([blob], 'mba.gba');
+}
+
+// Stream the body so the boot overlay can show real progress on the one slow
+// path (first load or a fresh build). Falls back to a plain blob when the length
+// is unknown or the browser can't stream the response.
+async function readBlobWithProgress(res, total, onStatus) {
+  if (!res.body || !total) return res.blob();
+  const reader = res.body.getReader();
+  const chunks = [];
+  let got = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    got += value.length;
+    onStatus?.(`Downloading the game… ${Math.min(99, Math.round((got / total) * 100))}%`);
+  }
+  return new Blob(chunks, { type: 'application/octet-stream' });
 }
 
 /** Fingerprint the downloaded ROM and compare against the server's own hash —
@@ -503,9 +551,9 @@ async function joinNow(name = null) {
   // spinning on the login screen while a multi-MB ROM downloads.
   $('#login').hidden = true;
   $('#stage').hidden = false;
-  showLoading('Downloading the game…');
+  showLoading('Preparing the game…');
   try {
-    await start('mgba', await fetchRomFile());
+    await start('mgba', await fetchRomFile((m) => showLoading(m)));
   } catch (err) {
     loadingError(String(err.message ?? err));
   }

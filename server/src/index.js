@@ -69,24 +69,31 @@ export function createServers(cfg = config) {
 
   // ---- static host (shared by the HTTP and HTTPS servers) ----
   const webRoot = path.resolve(cfg.webRoot);
-  const romInfoCache = { key: null, body: null };
+  // Fingerprint the current ROM build (sha256 + size + mtime), memoised by
+  // mtime:size so the multi-MB hash runs at most once per build. null = no build.
+  const romInfoCache = { key: null, sha256: null, size: 0, builtAt: 0 };
+  const romFingerprint = () => {
+    let st;
+    try { st = fs.statSync(cfg.romFile ?? ''); } catch { return null; }
+    const key = `${st.mtimeMs}:${st.size}`;
+    if (romInfoCache.key !== key) {
+      romInfoCache.key = key;
+      romInfoCache.sha256 = crypto.createHash('sha256').update(fs.readFileSync(cfg.romFile)).digest('hex');
+      romInfoCache.size = st.size;
+      romInfoCache.builtAt = st.mtimeMs;
+    }
+    return romInfoCache;
+  };
   const requestHandler = (req, res) => {
     const url = new URL(req.url, 'http://x');
 
-    // ROM build fingerprint — lets the client verify its download matches
-    // what the host built (stale-build / corrupted-transfer diagnostics).
+    // ROM build fingerprint — lets the client verify its download matches what
+    // the host built, and key its browser-side cache by the build hash.
     if (url.pathname === '/api/rom-info') {
-      fs.stat(cfg.romFile ?? '', (err, st) => {
-        if (err) return res.writeHead(404).end();
-        const cacheKey = `${st.mtimeMs}:${st.size}`;
-        if (romInfoCache.key !== cacheKey) {
-          const hash = crypto.createHash('sha256').update(fs.readFileSync(cfg.romFile)).digest('hex');
-          romInfoCache.key = cacheKey;
-          romInfoCache.body = JSON.stringify({ size: st.size, sha256: hash, builtAt: st.mtimeMs });
-        }
-        res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
-        res.end(romInfoCache.body);
-      });
+      const fp = romFingerprint();
+      if (!fp) return res.writeHead(404).end();
+      res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+      res.end(JSON.stringify({ size: fp.size, sha256: fp.sha256, builtAt: fp.builtAt }));
       return;
     }
 
@@ -155,20 +162,41 @@ export function createServers(cfg = config) {
       return;
     }
 
-    // The host's current ROM build — always the latest, straight from disk.
+    // The host's current ROM build. It's a big blob that's immutable until the
+    // next rebuild, so we let the browser cache it and revalidate: an unchanged
+    // build answers 304 (no multi-MB transfer), while a rebuild ships a new hash
+    // → new ETag → a fresh 200. Freshness on rebuild is preserved.
     if (url.pathname === '/rom/mba.gba') {
-      fs.readFile(cfg.romFile ?? '', (err, data) => {
+      const fp = romFingerprint();
+      if (!fp) {
+        res.writeHead(404).end('no ROM build on the server (run the ROM build first)');
+        return;
+      }
+      const etag = `"${fp.sha256}"`;
+      const headers = {
+        'content-type': 'application/octet-stream',
+        'cross-origin-opener-policy': 'same-origin',
+        'cross-origin-embedder-policy': 'require-corp',
+        'cache-control': 'no-cache', // cache, but always revalidate against the ETag
+        etag,
+      };
+      if (req.headers['if-none-match'] === etag) {
+        res.writeHead(304, headers).end();
+        return;
+      }
+      if (req.method === 'HEAD') {
+        // the join screen's readiness probe — answer from the stat, no 16 MiB read
+        headers['content-length'] = fp.size;
+        res.writeHead(200, headers).end();
+        return;
+      }
+      fs.readFile(cfg.romFile, (err, data) => {
         if (err) {
           res.writeHead(404).end('no ROM build on the server (run the ROM build first)');
           return;
         }
-        res.writeHead(200, {
-          'content-type': 'application/octet-stream',
-          'content-length': data.length,
-          'cross-origin-opener-policy': 'same-origin',
-          'cross-origin-embedder-policy': 'require-corp',
-          'cache-control': 'no-store', // a rebuild must be picked up immediately
-        });
+        headers['content-length'] = data.length;
+        res.writeHead(200, headers);
         res.end(req.method === 'HEAD' ? undefined : data);
       });
       return;

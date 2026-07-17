@@ -80,6 +80,12 @@ export class UI {
         req.onsuccess = req.onerror = req.onblocked = done;
       })));
     } catch { /* best effort */ }
+    // Also drop the cached ROM build so the next boot re-downloads it fresh.
+    try {
+      if ('caches' in window) {
+        for (const k of await caches.keys()) await caches.delete(k);
+      }
+    } catch { /* best effort */ }
     location.reload();
   }
 
