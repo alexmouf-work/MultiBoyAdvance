@@ -41,6 +41,7 @@ export class UI {
     this.#wireProximity();
     this.#wireTrade();
     this.#wireTeam();
+    this.#wireFriends();
     this.bridge.onParty = (mons) => this.#onOwnParty(mons);
     this.bridge.onLog = (text) => this.#debugLog(text);
     const resetBtn = this.$('#btn-reset-storage');
@@ -102,10 +103,12 @@ export class UI {
   }
 
   #tickDurations() {
-    for (const li of this.$('#players')?.querySelectorAll('li') ?? []) {
-      if (li.classList.contains('offline')) continue; // "seen … ago" refreshes on re-render
-      const p = this.players.get(Number(li.dataset.slot));
-      if (p) li.querySelector('.dur').textContent = `online ${formatDuration(Date.now() - p.joinedAt)}`;
+    for (const sel of ['#players', '#friends-list']) {
+      for (const li of this.$(sel)?.querySelectorAll('li') ?? []) {
+        if (li.classList.contains('offline') || !li.dataset.slot) continue; // "seen … ago" refreshes on re-render
+        const p = this.players.get(Number(li.dataset.slot));
+        if (p) li.querySelector('.dur').textContent = `online ${formatDuration(Date.now() - p.joinedAt)}`;
+      }
     }
   }
 
@@ -126,9 +129,27 @@ export class UI {
   #renderPlayers() {
     const tab = this.$('#sidebar-tab');
     if (tab) tab.textContent = `👥\n${this.players.size}`;
-    const ul = this.$('#players');
+    this.#buildRoster(this.$('#players'), false);
+    const fl = this.$('#friends-list');
+    if (fl) {
+      const shown = this.#buildRoster(fl, true); // friends panel: skip yourself
+      const empty = this.$('#friends-empty');
+      if (empty) empty.hidden = shown > 0;
+    }
+  }
+
+  /** Build the trainer roster into `ul` (online with action buttons, then
+   *  offline trainers). Shared by the sidebar and the left friends panel.
+   *  @param {boolean} skipSelf omit your own row (the friends panel does)
+   *  @returns {number} rows rendered */
+  #buildRoster(ul, skipSelf) {
+    if (!ul) return 0;
     ul.innerHTML = '';
+    let shown = 0;
+    const closePanels = () => this.$('#friends-panel')?.classList.remove('open');
+
     for (const [slot, p] of [...this.players.entries()].sort((a, b) => a[0] - b[0])) {
+      if (skipSelf && slot === this.slot) continue;
       const li = document.createElement('li');
       li.dataset.slot = slot;
 
@@ -146,31 +167,28 @@ export class UI {
       if (slot !== this.slot) {
         const actions = document.createElement('span');
         actions.className = 'actions';
-        const tp = document.createElement('button');
-        tp.textContent = 'teleport';
-        tp.dataset.action = 'tp';
-        tp.onclick = () => this.socket.send({ t: 'tp', to: slot });
-        const pvp = document.createElement('button');
-        pvp.textContent = 'battle';
-        pvp.dataset.action = 'pvp';
-        pvp.onclick = () => this.socket.send({ t: 'pvp', to: slot });
-        const tr = document.createElement('button');
-        tr.textContent = 'trade';
-        tr.dataset.action = 'trade';
-        tr.onclick = () => this.#openTradeEditor(slot);
-        const inv = document.createElement('button');
-        inv.textContent = 'team';
-        inv.dataset.action = 'team-invite';
-        inv.onclick = () => {
-          // First invite also creates the team (create is idempotent).
-          this.socket.send({ t: 'team.create' });
-          this.socket.send({ t: 'team.invite', to: slot });
-          this.log('team', `team invite sent to ${p.name}`);
+        const act = (label, action, fn) => {
+          const b = document.createElement('button');
+          b.textContent = label;
+          b.dataset.action = action;
+          b.onclick = () => { fn(); closePanels(); };
+          return b;
         };
-        actions.append(tp, pvp, tr, inv);
+        actions.append(
+          act('teleport', 'tp', () => this.socket.send({ t: 'tp', to: slot })),
+          act('battle', 'pvp', () => this.socket.send({ t: 'pvp', to: slot })),
+          act('trade', 'trade', () => this.#openTradeEditor(slot)),
+          act('team', 'team-invite', () => {
+            // First invite also creates the team (create is idempotent).
+            this.socket.send({ t: 'team.create' });
+            this.socket.send({ t: 'team.invite', to: slot });
+            this.log('team', `team invite sent to ${p.name}`);
+          }),
+        );
         li.append(actions);
       }
       ul.append(li);
+      shown++;
     }
 
     // Offline trainers, dimmed, with where they logged out (server registry).
@@ -189,7 +207,9 @@ export class UI {
       dur.textContent = offlineLine(u);
       li.append(dot, name, dur);
       ul.append(li);
+      shown++;
     }
+    return shown;
   }
 
   #wire() {
@@ -748,6 +768,24 @@ export class UI {
       li.textContent = `${owner.name}: #${mon.sp} lv${mon.lv}`;
       mergedUl.append(li);
     }
+  }
+
+  // ---- friends dropdown (left) — the mirror of the OPTIONS gear -------------
+
+  #wireFriends() {
+    const btn = this.$('#btn-friends');
+    const panel = this.$('#friends-panel');
+    if (!btn || !panel) return;
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      panel.classList.toggle('open');
+    };
+    // Tapping the game (or anywhere outside the panel/button) closes it.
+    document.addEventListener('pointerdown', (e) => {
+      if (panel.classList.contains('open') && !e.target.closest('#friends-panel, #btn-friends')) {
+        panel.classList.remove('open');
+      }
+    });
   }
 
   #wireTeam() {

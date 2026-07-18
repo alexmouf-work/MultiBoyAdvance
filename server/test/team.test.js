@@ -5,6 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { World } from '../src/world/world.js';
+import { BattleSession } from '../src/battle/session.js';
 import { mergeLineupWire, defaultTopPicks } from '../src/battle/merge.js';
 
 function makeCfg(overrides = {}) {
@@ -154,69 +155,71 @@ test('mergeLineupWire interleaves by rank: A1,B1,A2,B2,A3,B3', () => {
   assert.deepEqual(auto.map((b) => b[8]), [103 & 0xff, 102 & 0xff, 101 & 0xff]);
 });
 
-test('a team member’s encounter starts one shared battle for all online members', () => {
+// SAFETY STOPGAP: team battles are disabled server-side (TEAM_BATTLES_ENABLED)
+// until the single-host rebuild lands (they corrupted saves — see the plan). A
+// team member's encounter must now run as a NORMAL solo battle: no merged-party
+// injection, no borrowed Pokémon persisted.
+test('STOPGAP: a team member’s wild encounter runs a normal solo battle (no injection)', () => {
   const world = new World(makeCfg());
   const a = join(world, 'Ann');
   const b = join(world, 'Ben');
-  const c = join(world, 'Cyn'); // not in the team — must hear nothing
+  const c = join(world, 'Cyn');
   makeTeam(world, a, b);
   setParty(world, a.client, [{ sp: 252, lv: 10 }, { sp: 261, lv: 30 }]);
   setParty(world, b.client, [{ sp: 283, lv: 20 }, { sp: 285, lv: 15 }]);
-  world.handle(b.client, { t: 'team.lineup', picks: [1, 0] });
+
+  world.handle(b.client, { t: 'battle.open', kind: 0, opp: 286, enemy: wireMon(286, 9).b });
+
+  // No team battle.start to anyone (the injecting path is off); a solo
+  // join-window session opens instead (no merged party shipped).
+  assert.equal(msgs(a.inbox, 'battle.start').length, 0, 'teammate is NOT pulled in');
+  assert.equal(msgs(b.inbox, 'battle.start').length, 0, 'no immediate team start');
+  assert.equal(world.battles.size, 1, 'a normal join-window session opened');
+  const session = [...world.battles.values()][0];
+  assert.notEqual(session.mode, 'team');
+  world.close();
+});
+
+// The team-battle SESSION mechanics (interleaved line-up, controller rotation)
+// are still validated at the session level, so they're ready when the rebuilt
+// single-host path re-enables them.
+test('team session: interleaved line-up + controller rotation + dedupe', () => {
+  const a = { slot: 0, party: [], fullMons: [wireMon(252, 10), wireMon(261, 30)] };
+  const b = { slot: 1, party: [], fullMons: [wireMon(283, 20), wireMon(285, 15)] };
+  const sent = { 0: [], 1: [] };
+  a.send = (m) => sent[0].push(m);
+  b.send = (m) => sent[1].push(m);
 
   const enemy = wireMon(286, 9).b;
-  // BEN (not the leader) hits the encounter — he takes the first turn.
-  world.handle(b.client, { t: 'battle.open', kind: 0, opp: 286, enemy });
+  // Ben (slot 1) is the initiator; Ann's auto top-2 (261,252), Ben picked (285,283).
+  const partyWire = mergeLineupWire([
+    { slot: 1, fullMons: b.fullMons, picks: [1, 0] },
+    { slot: 0, fullMons: a.fullMons, picks: null },
+  ]);
+  const session = new BattleSession(
+    b, { kind: 0, opp: 286, mode: 'team', enemy: [enemy], teamOrder: [1, 0], partyWire }, 0,
+    (s) => { for (const p of s.participants) p.send(s.startPayload()); },
+  );
+  session.join(a);
+  session.startNow();
 
-  const started = msgs(b.inbox, 'battle.start')[0];
-  assert.ok(started, 'initiator got battle.start');
+  const started = sent[1][0];
   assert.equal(started.mode, 'team');
-  assert.equal(started.init, 1, 'the encounter opener is the first controller');
-  assert.deepEqual(started.order, [0, 1], 'order stays leader-first');
-  assert.deepEqual(started.enemy, [enemy], 'the exact enemy ships to everyone');
-  // Lineup: Ann auto top-2 (261,252 by level), Ben picked (285,283) →
-  // interleave A1,B1,A2,B2 = 261,285,252,283.
-  assert.deepEqual(started.partyWire.map((w) => w[8] | (w[9] << 8)), [261, 285, 252, 283]);
-  assert.deepEqual(msgs(a.inbox, 'battle.start')[0], started, 'identical payload to the teammate');
-  assert.equal(msgs(c.inbox, 'battle.start').length, 0, 'outsiders are not pulled in');
-  assert.equal(msgs(c.inbox, 'battle.offer').length, 0, 'no join-window offer in team mode');
-  world.close();
-});
+  assert.equal(started.init, 1, 'initiator is the first controller');
+  assert.deepEqual(started.order, [1, 0]);
+  assert.deepEqual(started.enemy, [enemy]);
+  // interleave B1,A1,B2,A2 = 285,261,283,252 (Ben first: he's the initiator/leader-order).
+  assert.deepEqual(started.partyWire.map((w) => w[8] | (w[9] << 8)), [285, 261, 283, 252]);
 
-test('turn controller rotates from the initiator; reports are deduped', () => {
-  const world = new World(makeCfg());
-  const a = join(world, 'Ann');
-  const b = join(world, 'Ben');
-  makeTeam(world, a, b);
-  setParty(world, a.client, [{ sp: 252, lv: 10 }, { sp: 261, lv: 30 }]);
-  setParty(world, b.client, [{ sp: 283, lv: 20 }, { sp: 285, lv: 15 }]);
-  world.handle(b.client, { t: 'battle.open', kind: 0, opp: 286, enemy: wireMon(286, 9).b });
-  const sid = msgs(b.inbox, 'battle.start')[0].sid;
+  // Controller rotates from the initiator (Ben=1): turn0→1, turn1→0, turn2→1.
+  assert.equal(session.controllerFor(0), 1);
+  assert.equal(session.controllerFor(1), 0);
+  assert.equal(session.controllerFor(2), 1);
 
-  // Both ROMs report turn 0; only ONE battle.turn goes out, controller = Ben (init).
-  world.handle(a.client, { t: 'battle.turn.begin', sid, turn: 0 });
-  world.handle(b.client, { t: 'battle.turn.begin', sid, turn: 0 });
-  assert.equal(msgs(a.inbox, 'battle.turn').length, 1);
-  assert.deepEqual(msgs(a.inbox, 'battle.turn')[0], { t: 'battle.turn', sid, turn: 0, controller: 1 });
-
-  // Turn 1 rotates to Ann, turn 2 back to Ben.
-  world.handle(a.client, { t: 'battle.turn.begin', sid, turn: 1 });
-  assert.equal(msgs(b.inbox, 'battle.turn').at(-1).controller, 0);
-  world.handle(b.client, { t: 'battle.turn.begin', sid, turn: 2 });
-  assert.equal(msgs(a.inbox, 'battle.turn').at(-1).controller, 1);
-  world.close();
-});
-
-test('with no teammate online the encounter falls back to the solo join-window path', () => {
-  const world = new World(makeCfg());
-  const a = join(world, 'Ann');
-  const b = join(world, 'Ben');
-  makeTeam(world, a, b);
-  world.removeClient(b.client); // partner gone (team survives: Ben was not leader…
-  // …actually Ben leaving removes him from the team; Ann remains alone in it)
-
-  world.handle(a.client, { t: 'battle.open', kind: 0, opp: 300 });
-  assert.equal(msgs(a.inbox, 'battle.start').length, 0, 'no instant team session');
-  assert.equal(world.battles.size, 1, 'a normal join-window session opened instead');
-  world.close();
+  // Both ROMs report turn 0; only ONE battle.turn fans out.
+  session.turnBegin(a, 0);
+  session.turnBegin(b, 0);
+  const turns = sent[0].filter((m) => m.t === 'battle.turn');
+  assert.equal(turns.length, 1);
+  assert.equal(turns[0].controller, 1);
 });

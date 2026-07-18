@@ -1,32 +1,202 @@
 # Build plan — Team (co-op) battles
 
-Status: **T1 + T2 BUILT** (teams, invites, line-up builder, shared team
-session with enemy transfer + interleaved lineup, controller rotation, and the
-grey spectator veil — all e2e-tested in demo mode). **T2.5 groundwork BUILT
-but UNVERIFIED on a real ROM**: the overlay now ships the exact enemy wire mon
-with wild encounters, parses the extended team START (init + enemy), queues
-peer battle entry via the scripted-wild path, and reports TURN_BEGIN — but
-input gating/injection (§7.2/§7.4, the battle-controller hooks) is NOT built,
-so on real ROMs both players' inputs still drive their own battles: the veil
-discourages out-of-turn input, the ROM does not yet enforce or replay it.
-T2.5 ships only after the plan's §11 two-instance determinism test passes on
-the host. Author: planning session (Opus). Builder: Claude Fable.
-Companion: `docs/plans/TRADING.md`. Normative protocol: `docs/PROTOCOL.md`.
-Roadmap: this is the completion + extension of **Phase 3 (co-op battles)**.
+Status: **REVISED (Revision 2) after real-ROM testing exposed a save-corruption
+bug and confirmed the lockstep approach fights the grain.** Team battles are
+**disabled server-side** (`TEAM_BATTLES_ENABLED = false`) until the safety
+rebuild ships. T1 (teams / invites / line-up builder / friends panel) stays
+live. The architecture below pivots from lockstep to **single-host** to match
+the owner's model and contain the data risk. Author: planning session.
+Builder: Claude Fable. Companion: `docs/plans/TRADING.md`. Normative protocol:
+`docs/PROTOCOL.md`. Roadmap: completion of **Phase 3 (co-op battles)**.
 
-> **Read this first.** Team battles are the single hardest thing in the project.
-> The merged party, shared RNG seed, and party injection **already exist** in the
-> overlay — but three load-bearing pieces do **not**, and the owner's spec needs
-> all three:
-> 1. Non-initiating peers never actually **enter** the battle (the START handler
->    only bookkeeps + injects the party + seeds RNG — no `BattleSetup` call).
-> 2. Relayed **turn inputs are not fed into the battle engine** (the handler is a
->    one-line stub).
-> 3. Turn **order is stored but never applied**, and the **enemy is never synced**
->    (each ROM would generate a different wild mon → instant desync).
->
-> This plan closes them, but it phases the risk so most of the visible value ships
-> before the deep battle-engine surgery.
+Revision 1 (the lockstep design) is preserved from §5 onward, clearly marked
+**SUPERSEDED**, for its still-valid pieces (team formation, line-up merge, the
+veil UI) and its rationale.
+
+---
+
+## 0. What went wrong (Revision 2 post-mortem)
+
+Two real-ROM failures, from the owner's report ("the team-up doesn't work, but
+I permanently acquired a copy of my friend's Pokémon"):
+
+### Bug A — permanent Pokémon acquisition (SAVE CORRUPTION, P0)
+A precise chain, all in the overlay:
+1. A team battle starts → the merged team party is injected into `gPlayerParty`
+   on the host (`InjectPendingParty`), the real party saved in `sPartyBackup`.
+2. The only thing that restores it is `NET_BSUB_END_OR_OUTCOME` (host→game
+   `battle.end`) calling `RestorePartyIfInjected()`.
+3. `battle.end` only arrives if the host's ROM **reports an outcome** via
+   `NetSendBattleOutcome`. **`NetSendBattleOutcome` HAS NO HOOK** — nothing in
+   `rom/setup.sh` calls it. So a real battle ending never reports → the server
+   never sends `battle.end` → **the merged party is never restored; it stays in
+   `gPlayerParty` indefinitely.**
+4. Back in the overworld, `NetSaveTick`→`EmitSaveBlocks()` (every ~10 s) runs
+   `CopyPartyAndObjectsToSave()`, copying the **still-injected** merged party
+   into SaveBlock1, and the server forges a `.sav` from it. `EmitSaveBlocks` is
+   **not gated on `sPartyInjected`.** → the borrowed Pokémon are **saved
+   permanently.**
+
+Two independent defects: **(A1)** no unconditional restore on battle exit, and
+**(A2)** the save path isn't gated on an injected temporary party. Either alone
+would have prevented the corruption; both must be fixed.
+
+> Already-corrupted saves won't self-heal — a borrowed mon that got saved is now
+> in that trainer's box/party. Release or deposit it manually (or add a small
+> `/prune` console command later). The server stopgap stops *new* corruption.
+
+### Bug B — teammates don't enter the battle
+Peer entry (Rev-1 "T2.5") needs a ROM rebuild and was unverified; input
+injection ("T3") was never built. So the teammate saw the veil (web-only) but
+their ROM never started a battle — exactly what the owner observed.
+
+---
+
+## 1. The corrected architecture: a single-host "team trainer"
+
+The lockstep design (every member's ROM runs the identical battle) was wrong for
+this problem: it **multiplied** the fragile party injection across every ROM
+(so every save was at risk), demanded frame-perfect cross-ROM determinism, and
+still needed intractable battle-engine input injection on all of them.
+
+The owner's actual model is simpler and better: *"going into a battle constructs
+a temporary **team trainer** — a single trainer with the combined Pokémon. This
+trainer is the one that battles and does everything else, but is commanded by
+each of the players that made it up, on their respective turns."*
+
+That is a **single-host** design:
+
+- **One battle runs — on the host** (the member who hit the encounter). The
+  host's ROM fields the **combined team party** (the temporary team trainer).
+  This is the only ROM that injects a merged party.
+- **Teammates do not run a battle.** They **see** the host's battle (a light
+  screen stream) and, on their turn, **command** it.
+- **Command = input relay, not engine injection.** The controlling teammate's
+  button presses are relayed to the host, which feeds them to *its* emulator
+  (`adapter.buttonDown/Up`). The host suppresses its own local input while a
+  teammate is in control. This is input **multiplexing in JS** — trivial —
+  instead of injecting a chosen action into the Gen-3 battle controller —
+  intractable. **No battle-engine surgery.**
+- The **grey veil** shows on whoever isn't commanding this turn (already built).
+
+Why this is the right pivot:
+1. **Matches the owner's model literally** — one trainer battles; each player
+   commands on their turn.
+2. **No battle-engine input injection** — the hard, fragile part of Rev-1
+   disappears; a teammate remote-drives the host's menu.
+3. **Data risk is contained to one ROM** — only the host injects a temp party;
+   teammates never inject, so **teammates' saves are never at risk**. Only the
+   host needs the temp-party save-guard.
+4. **"See the same screen" is literal** (streamed frames), not a
+   determinism-dependent local re-render. No shared seed, no enemy-sync, no
+   desync detector needed — a big simplification.
+
+Cost vs. Rev-1: adds a battle-screen **stream** + an **input relay** (ordinary
+browser/network work); removes peer battle-entry, deterministic injection,
+enemy-wire sync, and the desync detector.
+
+---
+
+## 2. P0 — the temporary team trainer must NEVER touch the save
+
+Required regardless of the rest; it is the direct fix for Bug A. All overlay
+work; takes effect on the next host ROM rebuild. **Team battles stay disabled
+server-side until this ships.**
+
+1. **Gate every save path on "a temp party is live."** Expose the injection
+   state from `net_battle.c` (`bool8 NetHasTempParty(void)` returning
+   `sPartyInjected`). In `net_save.c`, **skip `EmitSaveBlocks()` entirely while
+   `NetHasTempParty()`** (never snapshot a temporary party), and make the manual
+   /flash-save path a no-op or deferral in that state too. A temporary party must
+   never be serialized to the forge or to flash.
+2. **Restore UNCONDITIONALLY on battle exit — do not depend on the network.**
+   Add a battle→overworld transition detector in the overlay: when
+   `gMain.callback2` returns to `CB2_Overworld` while `sPartyInjected`, call
+   `RestorePartyIfInjected()` locally. This guarantees the real party is back the
+   instant the battle screen closes, even with no `battle.end`, a disconnect, or
+   a flee/whiteout. (`NetTeamTick`/a small `NetBattleTick` guard is a natural
+   home.)
+3. **Also restore on any session teardown** — disconnect, error, `NetInit`
+   re-entry — so a dropped connection mid-battle can't strand an injected party.
+4. **Wire the outcome hook** (`NetSendBattleOutcome`) so the host still reports
+   win/loss for regroup/whiteout warps — but restore must **not depend** on it.
+5. **Belt-and-suspenders:** if a save is somehow attempted while injected, use
+   `sPartyBackup` (never the live injected party), or refuse the save.
+
+**Data-safety tests (overlay self-checks + a host two-instance run):** after a
+team battle ends by any exit (win / loss / flee / run / disconnect), the party
+equals the ORIGINAL party, and **no `SAVEBLOCKS` is emitted while injected.**
+
+---
+
+## 3. Phases (each independently shippable + testable)
+
+| Phase | Deliverable | ROM rebuild? | Risk |
+|-------|-------------|--------------|------|
+| **P0** | Save-gating + unconditional restore + outcome hook (§2). Fixes the corruption. Team battles stay off. | yes | low, high-value |
+| **S1** | Host-only team trainer: on a team encounter, ONLY the host injects the combined party and battles it; teammates get the "team is battling" veil state (no entry, no stream yet). Re-enable team battles WITH the P0 guarantees. | yes | low |
+| **S2** | Screen **stream** host→teammates so they SEE the battle under the veil. | no (web) | medium |
+| **S3** | **Command relay**: the controlling teammate's inputs drive the host on their turn; host mutes local input; veil rotates. Full feature. | maybe (turn-begin hook) | medium |
+
+S1 already delivers a real "combined-team battle" (the host plays the whole
+team) safely — a coherent stopping point if S2/S3 stall. S2 adds spectating;
+S3 adds shared command.
+
+### S1 — host-only team trainer (server + overlay)
+- Server `_openTeamBattle`: send `battle.start{mode:'team', partyWire}` **only to
+  the host**; send teammates a `battle.watch{sid, host}` (veil on, no party, no
+  START). Drop `enemy`/seed sync (single-host needs neither).
+- Overlay: unchanged injection on the host, plus the P0 restore/save-gating. No
+  peer entry (delete/park the Rev-1 `NetTeamTick` scripted-wild path).
+- Re-enable `TEAM_BATTLES_ENABLED` once P0 lands.
+
+### S2 — screen stream (web only)
+- Host: while in a team battle, capture the mGBA canvas (`getImageData`/
+  `toBlob`, downscale to ~240×160), ~10–15 fps, send as `battle.frame{sid, …}`
+  (binary WS frame or base64) → server relays to the session's watchers only.
+- Teammate: render received frames to their canvas under the veil.
+- Bandwidth: 240×160 JPEG/delta @ ~10 fps ≈ tens of KB/s, battle-only — fine on
+  the existing relay. **Fallback (no video):** host emits structured battle state
+  (both active mons: species/HP/status + the active mon's 4 moves) each turn;
+  teammates render a synthetic view. Recommend video for fidelity; structured as
+  the low-bandwidth option.
+
+### S3 — command relay (web + a turn signal)
+- `battle.control{sid, controller}` — host announces whose turn it is (from the
+  ROM's `TURN_BEGIN`, controller = rotate-from-initiator, already computed).
+- `battle.press{sid, btn, down}` — controlling teammate → host, relayed.
+- Host input mux (bridge/adapter): if controller is a teammate, **ignore local
+  pad/keys** and apply relayed presses to the emulator; if controller is the
+  host, normal local input and ignore relayed presses.
+- Verify the ROM's turn-begin signal fires at **action-selection start** (not
+  resolution) so control switches before input is read; add/adjust the hook if
+  needed.
+- **Latency:** menu navigation over a stream has round-trip lag — acceptable for
+  a turn-based menu. **S3b (nice-to-have):** a structured "pick move N" — the
+  teammate picks from a synthetic 4-move UI, the host translates it to the menu
+  button sequence — cuts the round-trips.
+
+---
+
+## 4. What carries over unchanged from Rev-1 (already built, keep)
+- **Team formation** (create / invite online-only / accept / reject / leave /
+  disband), the **line-up builder GUI**, `mergeLineupWire` interleave, and the
+  **grey veil** element. All still correct.
+- The **friends panel** (left dropdown) is new and independent.
+- **Removed by the pivot:** enemy-wire transfer, shared-seed determinism, peer
+  battle entry, the desync detector, and all-ROM input injection. The Rev-1
+  overlay groundwork for these (`NetTeamTick` scripted-wild entry, enemy in
+  `battle.open`/START) should be parked or deleted when S1 lands — single-host
+  needs none of it.
+
+---
+
+## 5. SUPERSEDED — Revision 1 (lockstep) design follows
+
+Everything below is the original lockstep plan. It is **superseded by §0–§4**
+for the battle mechanics, but retained for the formation/line-up/veil detail and
+the rationale that led to the pivot. Where Rev-1 says "every ROM runs the
+identical battle," read §1 instead.
 
 ---
 

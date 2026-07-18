@@ -201,7 +201,43 @@ test('trading: offer → counter-offer → accept moves Pokémon both ways', asy
   await ubo.close();
 });
 
-test('team battles: invite → line-up → shared battle with rotating grey veil', async () => {
+test('mobile: friends dropdown (left) mirrors OPTIONS — roster + actions + auto-close', async () => {
+  // Two mobile contexts so the roster has someone to show.
+  const amy = await joinAsMobile('Amy');
+  const bob = await joinAsMobile('Bob');
+  await amy.waitForFunction(() => window.mba.ui.players.size === 2, null, { timeout: 6000 });
+
+  // The immersive mobile layout shows the FRIENDS button on the left.
+  assert.equal(
+    await amy.evaluate(() => document.querySelector('#btn-friends')?.offsetParent !== null),
+    true, 'friends button shows in the immersive layout',
+  );
+  await amy.evaluate(() => document.querySelector('#btn-friends').click());
+  const panel = await amy.evaluate(() => ({
+    open: document.querySelector('#friends-panel').classList.contains('open'),
+    rows: [...document.querySelectorAll('#friends-list li .pname')].map((n) => n.textContent),
+    // actions live only on ONLINE rows (offline trainers from earlier tests
+    // may also appear, dimmed and action-less — same as the sidebar).
+    onlineActions: [...new Set([...document.querySelectorAll('#friends-list li:not(.offline) button')].map((b) => b.dataset.action))],
+  }));
+  assert.ok(panel.open, 'panel opens');
+  assert.ok(panel.rows.includes('Bob'), 'shows the other online trainer');
+  assert.ok(!panel.rows.includes('Amy'), 'does not list yourself');
+  assert.deepEqual(panel.onlineActions, ['tp', 'pvp', 'trade', 'team-invite']);
+
+  // A friend action fires and closes the panel.
+  await amy.evaluate(() => document.querySelector('#friends-list li button[data-action="team-invite"]').click());
+  assert.equal(
+    await amy.evaluate(() => document.querySelector('#friends-panel').classList.contains('open')),
+    false, 'panel closes after an action',
+  );
+  await bob.waitForSelector('.offer button[data-action="team-accept"]', { timeout: 5000 });
+
+  await amy.context().close();
+  await bob.context().close();
+});
+
+test('teams: invite → line-up builder → disband (battles stopgapped to solo)', async () => {
   const ann = await joinAsDemo('Amy');
   const ben = await joinAsDemo('Bob');
   const annSlot = await ann.evaluate(() => window.mba.ui.slot);
@@ -232,57 +268,19 @@ test('team battles: invite → line-up → shared battle with rotating grey veil
     benSlot, { timeout: 5000 },
   );
 
-  // BOB runs into a wild mon: both members are pulled into one team battle.
+  // STOPGAP: team battles are disabled server-side (they corrupted saves), so
+  // a team member's encounter runs a normal SOLO battle — no team start, no
+  // spectator veil for the teammate. (The team-battle session mechanics are
+  // unit-tested in server/test/team.test.js, ready for the single-host rebuild.)
   await ben.evaluate(() => window.mba.adapter.startEncounter());
-  for (const page of [ann, ben]) {
-    await page.waitForFunction(
-      () => window.mba.adapter.events.some((e) => e.t === 'battle.started' && e.mode === 'team'),
-      null, { timeout: 5000 },
-    );
-  }
-  const started = await ann.evaluate(() => window.mba.adapter.events.find((e) => e.t === 'battle.started'));
-  assert.equal(started.init, benSlot, 'the encounter opener takes the first turn');
-  assert.equal(started.enemy, 1, 'the exact enemy mon shipped to the peer');
-
-  // NOTE: waitForSelector defaults to the "visible" state, which a [hidden]
-  // element never reaches — assert veil state via the DOM property instead.
-  const veilShown = (page, want) => page.waitForFunction(
-    (w) => document.querySelector('#battle-turn-veil')?.hidden === !w,
-    want, { timeout: 5000 },
+  await new Promise((r) => setTimeout(r, 400));
+  const teamStarts = await ann.evaluate(() =>
+    window.mba.adapter.events.filter((e) => e.t === 'battle.started' && e.mode === 'team').length);
+  assert.equal(teamStarts, 0, 'no team battle starts under the stopgap');
+  assert.equal(
+    await ann.evaluate(() => document.querySelector('#battle-turn-veil')?.hidden),
+    true, 'the teammate is not veiled by a solo encounter',
   );
-
-  // The UI veil flips on the fast socket path; the adapter's turn counter
-  // advances on the slower mailbox path — wait for the adapter to reach the
-  // turn before acting on it, or the input reports an already-deduped turn.
-  const atTurn = (page, n) => page.waitForFunction(
-    (t) => window.mba.adapter.battle?.turnNo === t, n, { timeout: 5000 },
-  );
-
-  // Turn 0: Bob controls — Amy is veiled, Bob is not.
-  await veilShown(ann, true);
-  await veilShown(ben, false);
-
-  // Bob submits his action → turn 1 rotates to Amy; the veils flip.
-  await atTurn(ben, 0);
-  await ben.evaluate(() => window.mba.adapter.sendTurnInput(1));
-  await veilShown(ben, true);
-  await veilShown(ann, false);
-
-  // And back: Amy acts → turn 2 is Bob's again.
-  await atTurn(ann, 1);
-  await ann.evaluate(() => window.mba.adapter.sendTurnInput(1));
-  await veilShown(ann, true);
-  await veilShown(ben, false);
-
-  // The initiator (Bob) reports the win; the veil clears everywhere.
-  await ben.evaluate(() => window.mba.adapter.endBattle(1));
-  for (const page of [ann, ben]) {
-    await page.waitForFunction(
-      () => window.mba.adapter.events.some((e) => e.t === 'battle.ended' && e.result === 1),
-      null, { timeout: 5000 },
-    );
-    await veilShown(page, false);
-  }
 
   // Leader leaves → the team disbands for everyone.
   await ann.click('#btn-team-leave');

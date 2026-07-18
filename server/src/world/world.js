@@ -19,6 +19,14 @@ const TRADE_MAX_ITEMS = 8; // per side
 const TRADE_MAX_MONS = 6; // per side
 const TEAM_INVITE_TTL_MS = 120_000; // 2 min to answer a team invite
 const TEAM_MAX = 3; // members per team (A,B,C → A1,B1,C1,A2,B2,C2)
+// SAFETY STOPGAP (see docs/plans/TEAM-BATTLES.md "What went wrong"): the old
+// team-battle path injected a merged party into the initiator's live save and
+// — with no battle-end report from the ROM — never restored it, so the forge
+// persisted the borrowed Pokémon. Auto-starting team battles is DISABLED until
+// the single-host rebuild (which never lets a temporary party touch the save)
+// ships. Team formation, invites, the line-up builder, and the panel all stay
+// live; a wild encounter just runs as a normal solo battle for now.
+const TEAM_BATTLES_ENABLED = false;
 
 // Hoenn starters + the kit every new player gets alongside one. These are the
 // ROM's INTERNAL Hoenn species order (pokeemerald constants), NOT National Dex
@@ -402,7 +410,7 @@ export class World {
     // battle immediately — no join window, regardless of location. With no
     // teammate online the initiator falls through to the normal solo path.
     const team = this._teamOf(client);
-    if (team) {
+    if (TEAM_BATTLES_ENABLED && team) {
       const online = team.members.map((s) => this.clients.get(s)).filter(Boolean);
       if (online.length >= 2) return this._openTeamBattle(client, team, online, msg);
     }
