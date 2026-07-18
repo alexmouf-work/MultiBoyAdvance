@@ -11,6 +11,9 @@ typedef u8 bool8; typedef u16 bool16; typedef u32 bool32;
 #define PARTY_SIZE 6
 #define OBJECT_EVENTS_COUNT 16
 #define WARP_ID_NONE (-1)
+// Border width around every map: an object at map tile (x,y) has
+// currentCoords (x+MAP_OFFSET, y+MAP_OFFSET); warps use raw map tiles.
+#define MAP_OFFSET 7
 struct Coords16 { s16 x, y; };
 struct WarpData { s8 mapGroup, mapNum, warpId; s16 x, y; };
 struct Location { u8 mapGroup, mapNum; };

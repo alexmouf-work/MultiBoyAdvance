@@ -82,7 +82,7 @@ record self-delimiting). Types `0x01–0x7F` flow game→host, `0x80–0xFF` hos
 
 | Type | Name | Payload |
 |---|---|---|
-| 0x01 | `PRESENCE` | mapGroup u8, mapNum u8, x s16, y s16, facing u8, moveState u8 — sent when position/map/facing changes, at most once per frame |
+| 0x01 | `PRESENCE` | mapGroup u8, mapNum u8, x s16, y s16, facing u8, moveState u8 — sent when position/map/facing changes, at most once per frame. **`x,y` are raw map tiles** (0-based, the `SetWarpDestination`/warp-event convention), NOT the object-event `currentCoords` which carry the +7 `MAP_OFFSET` border — so a teleport-to-player warp lands ON the target |
 | 0x02 | `FLAG_SET` | flagId u16 — a synced story flag was set locally |
 | 0x03 | `VAR_SET` | varId u16, value u16 |
 | 0x05 | `PARTY_SUMMARY` | count u8, then per mon: species u16, level u8, hpPct u8 — sent on party change; drives roster UI |

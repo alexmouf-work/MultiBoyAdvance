@@ -43,8 +43,13 @@ static void SendPresenceIfChanged(void)
 
     p[0] = gSaveBlock1Ptr->location.mapGroup;
     p[1] = gSaveBlock1Ptr->location.mapNum;
-    WR_S16(p, 2, player->currentCoords.x);
-    WR_S16(p, 4, player->currentCoords.y);
+    // Report RAW map coordinates (0-based tile), not the object-event
+    // currentCoords which carry the +MAP_OFFSET border. Warps
+    // (SetWarpDestination) use raw map tiles, so a teleport-to-player must
+    // carry raw tiles too — otherwise the requester lands MAP_OFFSET tiles
+    // off (into a wall/corner). RenderGhosts adds the offset back for sprites.
+    WR_S16(p, 2, player->currentCoords.x - MAP_OFFSET);
+    WR_S16(p, 4, player->currentCoords.y - MAP_OFFSET);
     p[6] = GetPlayerFacingDirection();
     p[7] = 0; // moveState: reserved for run/bike/surf animation hints
 
@@ -148,7 +153,9 @@ static void RenderGhosts(void)
             sGhostFacing[i] = 0;
         }
 
-        GhostPlaceSprite(&gSprites[g->spriteId], g->x, g->y);
+        // Presence carries raw map tiles; sprite placement wants the
+        // object-event (currentCoords) convention, so add the border back.
+        GhostPlaceSprite(&gSprites[g->spriteId], g->x + MAP_OFFSET, g->y + MAP_OFFSET);
         if (g->facing != sGhostFacing[i] && g->facing >= 1 && g->facing <= 4)
         {
             StartSpriteAnim(&gSprites[g->spriteId], GetFaceDirectionAnimNum(g->facing));
