@@ -15,6 +15,14 @@
 #include "net/mailbox.h"
 #include "net/net.h"
 
+// Map border width: an object at map tile (x,y) has currentCoords
+// (x+MAP_OFFSET, y+MAP_OFFSET); warps use raw map tiles. pokeemerald defines
+// this in global.fieldmap.h, which this overlay doesn't pull in — provide it
+// locally if absent (it's a fixed 7 across the decomp).
+#ifndef MAP_OFFSET
+#define MAP_OFFSET 7
+#endif
+
 static u8 sLast[8]; // last PRESENCE payload we sent
 static bool8 sHaveLast = FALSE;
 static u8 sThrottle = 0;

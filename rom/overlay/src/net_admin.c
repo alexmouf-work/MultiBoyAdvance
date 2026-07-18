@@ -154,12 +154,16 @@ static bool8 AdminApply(const u8 *p, u8 len)
     case NET_ADMIN_TAKE_MON:
         // Trade give-away: remove the party mon at slot p[1] — but only if it
         // is still the species the server validated (a reshuffled party must
-        // not cost the wrong Pokémon). Compact so no gap is left mid-party.
+        // not cost the wrong Pokémon). Shift the rest down + clear the tail so
+        // no gap is left mid-party (the party is always compact in pokeemerald).
         if (len >= 4 && AdminSlotValid(p[1])
             && GetMonData(&gPlayerParty[p[1]], MON_DATA_SPECIES, NULL) == RD_U16(p, 2))
         {
-            ZeroMonData(&gPlayerParty[p[1]]);
-            CompactPartySlots();
+            u32 i;
+
+            for (i = p[1]; i + 1 < PARTY_SIZE; i++)
+                memcpy(&gPlayerParty[i], &gPlayerParty[i + 1], sizeof(struct Pokemon));
+            ZeroMonData(&gPlayerParty[PARTY_SIZE - 1]);
             CalculatePlayerPartyCount();
             NetSendFullParty(); // re-report the post-trade party
             NetSendPartySummary();
