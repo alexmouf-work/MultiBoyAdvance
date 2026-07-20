@@ -880,6 +880,13 @@ body.touch #gamewrap.mobile-overlay #touch {
   --pfit: 0.8;
   position: absolute;
   inset: 0;
+  /* The game is letterboxed inside the frame; match the touch layer to the
+     PICTURE (min(100vw,150vh) wide, centred) so the pads sit ON the display and
+     can never land on the black bars beside it. Portrait overrides the width. */
+  left: 50%;
+  right: auto;
+  width: min(100vw, 150vh);
+  margin-left: calc(min(100vw, 150vh) / -2);
   max-width: none;
   min-height: 0;
   pointer-events: none;
@@ -940,6 +947,12 @@ body.touch #gamewrap.controls-below #right-cluster { position: static; }
     transform: translateX(100dvw) rotate(90deg);
   }
   body.touch #gamewrap.mobile-overlay #screen { width: min(100dvh, 150dvw); }
+  /* rotated frame: the picture is min(100dvh,150dvw) wide — match the pad layer
+     to it so the controls stay on the display, not on the letterbox bars */
+  body.touch #gamewrap.mobile-overlay #touch {
+    width: min(100dvh, 150dvw);
+    margin-left: calc(min(100dvh, 150dvw) / -2);
+  }
   body.touch #title { display: none; }
 }
 /* roomier portrait tablets can show the pads full size */

@@ -370,8 +370,24 @@ function wireGameControls(adapter, socket, ui) {
   const stickMove = (e) => {
     const r = base.getBoundingClientRect();
     const R = r.width / 2;
-    let dx = e.clientX - (r.left + R);
-    let dy = e.clientY - (r.top + R);
+    let dx = e.clientX - (r.left + r.width / 2);
+    let dy = e.clientY - (r.top + r.height / 2);
+    // In the mobile-overlay portrait layout the whole #gamewrap is rotated 90°,
+    // so a viewport delta is rotated relative to the stick's own axes — the knob
+    // would fly off sideways and the 8-way mapping would be wrong. Undo the
+    // gamewrap transform's linear part to read the delta in the frame the player
+    // actually sees (no-op when there's no transform: below/windowed/landscape).
+    const tf = getComputedStyle(wrap).transform;
+    if (tf && tf !== 'none') {
+      const m = new DOMMatrix(tf);
+      const det = m.a * m.d - m.b * m.c;
+      if (det) {
+        const lx = (dx * m.d - dy * m.c) / det;
+        const ly = (-dx * m.b + dy * m.a) / det;
+        dx = lx;
+        dy = ly;
+      }
+    }
     const len = Math.hypot(dx, dy) || 1;
     const clamped = Math.min(len, R * 0.72);
     knob.style.transform = `translate(${(dx / len) * clamped}px, ${(dy / len) * clamped}px)`;
