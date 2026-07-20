@@ -3,8 +3,15 @@
 > **Shortcut:** `setup-windows.bat` in the repo root does everything on this
 > page in one run (elevates itself, installs Node via winget if missing,
 > installs dependencies, runs the server tests, optionally installs WSL2 and
-> builds the ROM, opens the firewall, starts the server). The sections below
-> are the manual equivalent and the reference for troubleshooting.
+> builds the ROM, **optionally pushes the new ROM + web client to the live
+> server**, opens the firewall, starts the server). The sections below are the
+> manual equivalent and the reference for troubleshooting.
+>
+> After the ROM build it offers to deploy: it runs `scripts\deploy-mba.ps1`
+> against `mba.mouftools.com` (as `root`) over your SSH key — shipping the ROM
+> and the latest `web/` and restarting the box without touching its saved world
+> state. Point it elsewhere with `set MBA_DEPLOY_HOST=…` / `set MBA_DEPLOY_USER=…`
+> before running, or answer **N** and deploy later by hand.
 
 The host machine runs the server (always) and builds the ROM (once per change).
 Players only need a browser — or desktop mGBA for the Lua path.

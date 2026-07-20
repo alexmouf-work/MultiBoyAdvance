@@ -28,8 +28,11 @@ $bundle = Join-Path $env:TEMP 'mba-deploy.tgz'
 tar -czf $bundle --exclude=server/node_modules --exclude=server/data --exclude=web/node_modules @items
 if ($LASTEXITCODE -ne 0) { Write-Error 'tar failed' }
 
+# accept-new: auto-trust a first-seen host key (so a fresh connect — e.g. by
+# domain instead of IP — never hangs on an interactive prompt when this runs
+# from setup-windows.bat), while still rejecting a CHANGED key.
 Write-Host "[mba] uploading to ${User}@${HostAddr}..."
-scp $bundle "${User}@${HostAddr}:/tmp/mba-deploy.tgz"
+scp -o StrictHostKeyChecking=accept-new $bundle "${User}@${HostAddr}:/tmp/mba-deploy.tgz"
 if ($LASTEXITCODE -ne 0) { Write-Error 'scp failed' }
 Remove-Item $bundle
 
@@ -37,7 +40,7 @@ $remote = 'set -e; sudo tar xzf /tmp/mba-deploy.tgz -C /opt/mba; ' +
     'cd /opt/mba/server && sudo npm install --omit=dev --no-audit --no-fund; ' +
     'sudo chown -R mba:mba /opt/mba; sudo systemctl restart mba; ' +
     'rm -f /tmp/mba-deploy.tgz; sleep 1; systemctl is-active mba'
-ssh "${User}@${HostAddr}" $remote
+ssh -o StrictHostKeyChecking=accept-new "${User}@${HostAddr}" $remote
 if ($LASTEXITCODE -ne 0) { Write-Error 'remote deploy failed - check: ssh the box, journalctl -u mba -n 30' }
 
 Write-Host '[mba] deployed. Players: https://your-domain (rebuild the ROM anytime and re-run this script).' -ForegroundColor Green

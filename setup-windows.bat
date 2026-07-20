@@ -4,9 +4,9 @@ title MultiBoyAdvance setup
 cd /d "%~dp0"
 
 echo ============================================================
-echo  MultiBoyAdvance - one-shot Windows setup  (script v7)
-echo  Steps: admin check / self-update / Node.js / dependencies /
-echo         tests / ROM build (optional, WSL2) / firewall / launch
+echo  MultiBoyAdvance - one-shot Windows setup  (script v8)
+echo  Steps: admin check / self-update / Node.js / dependencies / tests /
+echo         ROM build (WSL2) / deploy to server (optional) / firewall / launch
 echo ============================================================
 echo.
 
@@ -112,7 +112,7 @@ echo [3/6] Server tests green. OK.
 :: ---------- [4/6] ROM build (optional; needs WSL2) ----------
 if exist rom\build\mba.gba (
     echo [4/6] rom\build\mba.gba already exists - skipping ROM build.
-    goto firewall
+    goto deploy_step
 )
 choice /C YN /M "[4/6] Build the game ROM now (needs WSL2 Ubuntu, ~10 min first run)"
 if errorlevel 2 (
@@ -177,6 +177,31 @@ if not exist rom\build\mba.gba (
     exit /b 1
 )
 echo [4/6] ROM built: rom\build\mba.gba. OK.
+
+:deploy_step
+:: ---------- [4.5/6] push the new ROM + web client to the live server ----------
+:: Bundles the deploy into the rebuild: ships server\ + web\ + the ROM to the
+:: VPS and restarts it (never touches the box's saved world state). Override the
+:: target with:  set MBA_DEPLOY_HOST=your-host   set MBA_DEPLOY_USER=your-user
+if not exist rom\build\mba.gba goto firewall
+if not defined MBA_DEPLOY_HOST set "MBA_DEPLOY_HOST=mba.mouftools.com"
+if not defined MBA_DEPLOY_USER set "MBA_DEPLOY_USER=root"
+choice /C YN /M "[4.5/6] Push this ROM + web client to %MBA_DEPLOY_HOST% now"
+if errorlevel 2 (
+    echo       Skipped. Deploy anytime with:
+    echo         powershell -ExecutionPolicy Bypass -File scripts\deploy-mba.ps1 -HostAddr %MBA_DEPLOY_HOST% -User %MBA_DEPLOY_USER%
+    goto firewall
+)
+echo       Deploying to %MBA_DEPLOY_USER%@%MBA_DEPLOY_HOST% (uses your SSH key)...
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\deploy-mba.ps1 -HostAddr "%MBA_DEPLOY_HOST%" -User "%MBA_DEPLOY_USER%"
+if errorlevel 1 (
+    echo.
+    echo       Deploy FAILED - your local build is fine. Check SSH/network, then re-run:
+    echo         powershell -ExecutionPolicy Bypass -File scripts\deploy-mba.ps1 -HostAddr %MBA_DEPLOY_HOST% -User %MBA_DEPLOY_USER%
+    pause
+    goto firewall
+)
+echo [4.5/6] Deployed to %MBA_DEPLOY_HOST%. OK.
 
 :firewall
 :: ---------- [5/6] firewall ----------
