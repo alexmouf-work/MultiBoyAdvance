@@ -84,6 +84,21 @@ export function createServers(cfg = config) {
     }
     return romInfoCache;
   };
+  // Strong ETag for a static file: sha256 of its bytes, memoised per path by
+  // mtime:size so we hash each file at most once per build. This is what lets
+  // `cache-control: no-cache` actually pay off — the browser revalidates and we
+  // answer 304 (no re-transfer) for an unchanged file, while a redeploy changes
+  // the bytes → new ETag → a fresh 200. Without it the WASM core (~2.4 MB) and
+  // every JS/CSS asset were fully re-downloaded on every single page load.
+  const staticEtagCache = new Map(); // file -> { key, etag }
+  const staticEtag = (file, st) => {
+    const key = `${st.mtimeMs}:${st.size}`;
+    const hit = staticEtagCache.get(file);
+    if (hit && hit.key === key) return hit.etag;
+    const etag = `"${crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')}"`;
+    staticEtagCache.set(file, { key, etag });
+    return etag;
+  };
   const requestHandler = (req, res) => {
     const url = new URL(req.url, 'http://x');
 
@@ -209,19 +224,39 @@ export function createServers(cfg = config) {
       res.writeHead(403).end();
       return;
     }
-    fs.readFile(file, (err, data) => {
-      if (err) {
+    fs.stat(file, (statErr, st) => {
+      if (statErr || !st.isFile()) {
         res.writeHead(404).end('not found');
         return;
       }
-      res.writeHead(200, {
+      const etag = staticEtag(file, st);
+      const headers = {
         'content-type': MIME[path.extname(file)] ?? 'application/octet-stream',
         // Cross-origin isolation: required by the threaded mGBA WASM core.
         'cross-origin-opener-policy': 'same-origin',
         'cross-origin-embedder-policy': 'require-corp',
-        'cache-control': 'no-cache',
+        'cache-control': 'no-cache', // cache, but revalidate against the ETag
+        etag,
+      };
+      // Unchanged asset the browser already holds: 304, skip the re-transfer.
+      if (req.headers['if-none-match'] === etag) {
+        res.writeHead(304, headers).end();
+        return;
+      }
+      if (req.method === 'HEAD') {
+        headers['content-length'] = st.size;
+        res.writeHead(200, headers).end();
+        return;
+      }
+      fs.readFile(file, (err, data) => {
+        if (err) {
+          res.writeHead(404).end('not found');
+          return;
+        }
+        headers['content-length'] = data.length;
+        res.writeHead(200, headers);
+        res.end(data);
       });
-      res.end(data);
     });
   };
   const httpServer = http.createServer(requestHandler);

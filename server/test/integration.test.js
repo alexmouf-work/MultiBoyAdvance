@@ -147,6 +147,28 @@ test('http host serves the web client with cross-origin isolation headers', asyn
   srv.close();
 });
 
+test('static assets carry an ETag and revalidate to 304 (no re-download each load)', async () => {
+  const srv = createServers(testCfg());
+  await new Promise((r) => srv.httpServer.listen(0, '127.0.0.1', r));
+  const port = srv.httpServer.address().port;
+
+  // First load: full 200 with a strong validator.
+  const first = await fetch(`http://127.0.0.1:${port}/index.html`);
+  assert.equal(first.status, 200);
+  const etag = first.headers.get('etag');
+  assert.ok(etag, 'static responses must carry an ETag so the browser can revalidate');
+  await first.text();
+
+  // Reload with the ETag the browser now holds: unchanged file → 304, no body.
+  const revalidated = await fetch(`http://127.0.0.1:${port}/index.html`, {
+    headers: { 'if-none-match': etag },
+  });
+  assert.equal(revalidated.status, 304, 'unchanged asset must 304, not re-send the bytes');
+  assert.equal((await revalidated.text()).length, 0, '304 must not carry a body');
+
+  srv.close();
+});
+
 test('/api/users lists the trainer registry for the join screen', async () => {
   const srv = createServers(testCfg());
   await new Promise((r) => srv.httpServer.listen(0, '127.0.0.1', r));
