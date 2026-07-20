@@ -29,9 +29,11 @@
 #define FORGE_INTERVAL_FRAMES (10 * 60) // ~10s between save-block snapshots
 #define FIRST_FORGE_FRAMES (3 * 60)     // first snapshot ~3s after coming online
 
-// Start pre-charged so the first snapshot after joining lands quickly (a fresh
-// character then has a server-side baseline within ~3s, not ~10s).
-static u16 sSinceForge = FORGE_INTERVAL_FRAMES - FIRST_FORGE_FRAMES;
+// Zero-init (.bss): pokeemerald's modern ld script DISCARDS .data, so a
+// non-zero static initializer would fail to link. The offline branch of
+// NetSaveTick pre-charges this every frame before the player is ever online,
+// so the first snapshot after joining still lands ~3s in (not ~10s).
+static u16 sSinceForge;
 
 #define WR_U32(p, i, v)                        \
     do                                         \
