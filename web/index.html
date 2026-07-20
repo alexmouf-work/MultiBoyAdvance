@@ -72,6 +72,18 @@
           </label>
         </details>
       </div>
+
+      <!-- Recovery console — usable before joining, so a player stuck on a
+           corrupted-storage boot can reset without getting into the game. Only
+           browser-local commands work here (no server connection yet). -->
+      <details id="login-console-wrap" class="login-console">
+        <summary>Console</summary>
+        <ul id="login-console-out"></ul>
+        <form id="login-console-form">
+          <input id="login-console-in" placeholder="/help" autocomplete="off" autocapitalize="off" spellcheck="false" />
+        </form>
+        <button id="login-reset-storage" class="ghost" title="Deletes this browser's cached emulator files (saves stay on the server) and reloads — fixes corrupted-storage boots">Reset emulator storage</button>
+      </details>
     </div>
   </section>
 

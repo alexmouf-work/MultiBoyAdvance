@@ -5,6 +5,7 @@ import { UI } from './ui/ui.js';
 import { assertAdapter } from './emu/adapter.js';
 import { DemoAdapter } from './emu/demo-adapter.js';
 import { mapName } from './data/map-names.js';
+import { wipeLocalData } from './recovery.js';
 
 const $ = (sel) => document.querySelector(sel);
 const ROM_URL = '/rom/mba.gba';
@@ -42,10 +43,56 @@ async function initJoinScreen() {
     $('#rom-status').textContent = 'No game build on the server yet (host: run the ROM build).';
   }
 
+  wireLoginConsole();
+
   await loadRoster();
   setInterval(() => {
     if (!$('#login').hidden) loadRoster();
   }, 10_000);
+}
+
+// A minimal console on the start screen. There's no socket yet, so only
+// browser-local commands work — enough for a player whose cached emulator
+// storage got corrupted (and who therefore can't boot into the in-game
+// console) to reset and recover. The full console lives in the sidebar once
+// you've joined.
+function wireLoginConsole() {
+  const out = $('#login-console-out');
+  const input = $('#login-console-in');
+  if (!out || !input) return;
+  const print = (text, ok = null) => {
+    const li = document.createElement('li');
+    if (ok !== null) li.dataset.ok = String(ok);
+    li.textContent = text;
+    out.append(li);
+    while (out.children.length > 60) out.firstChild.remove();
+    li.scrollIntoView({ block: 'nearest' });
+  };
+  $('#login-console-form').onsubmit = (e) => {
+    e.preventDefault();
+    const line = input.value.trim();
+    if (!line) return;
+    print(`> ${line}`);
+    input.value = '';
+    const cmd = line.toLowerCase();
+    if (cmd === '/help') {
+      print('not joined yet — only local commands work here:', null);
+      print('  /resetlocal  wipe this browser’s data (settings + cached emulator files) and reload', null);
+      print('  /help        this list', null);
+      print('Join the game for the full console (server commands, admin, trades).', null);
+      return;
+    }
+    if (cmd === '/resetlocal') {
+      print('wiping this browser’s local data (settings + cached emulator files), reloading…', true);
+      wipeLocalData({ includePrefs: true });
+      return;
+    }
+    print('not joined yet — this start-screen console only runs local commands (try /help). Join the game to run server commands.', false);
+  };
+  $('#login-reset-storage').onclick = () => {
+    if (!confirm('Clear this browser\'s cached emulator files and reload? Your progress is safe on the server.')) return;
+    wipeLocalData();
+  };
 }
 
 // ---- returning trainers -------------------------------------------------------

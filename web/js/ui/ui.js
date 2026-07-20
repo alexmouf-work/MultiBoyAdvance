@@ -3,6 +3,7 @@
 // the e2e suite can assert on them.
 
 import { mapName } from '../data/map-names.js';
+import { wipeLocalData } from '../recovery.js';
 
 const PLAYER_COLORS = ['#e5484d', '#3e63dd', '#30a46c', '#f5a623', '#8e4ec6', '#00b3c2', '#d6409f', '#846358'];
 
@@ -75,26 +76,12 @@ export class UI {
   }
 
   // Last-resort recovery: a crashed session can corrupt the emulator's
-  // IndexedDB filesystem, which then garbles every later boot on this
-  // browser. Server-side saves make this safe to wipe.
-  async wipeLocalData({ includePrefs = false } = {}) {
-    if (includePrefs) {
-      try { localStorage.clear(); } catch { /* best effort */ }
-    }
-    try {
-      const dbs = (await indexedDB.databases?.()) ?? [];
-      await Promise.all(dbs.map((db) => new Promise((done) => {
-        const req = indexedDB.deleteDatabase(db.name);
-        req.onsuccess = req.onerror = req.onblocked = done;
-      })));
-    } catch { /* best effort */ }
-    // Also drop the cached ROM build so the next boot re-downloads it fresh.
-    try {
-      if ('caches' in window) {
-        for (const k of await caches.keys()) await caches.delete(k);
-      }
-    } catch { /* best effort */ }
-    location.reload();
+  // IndexedDB filesystem, which then garbles every later boot on this browser.
+  // Server-side saves make this safe to wipe. The implementation lives in
+  // js/recovery.js so the pre-login start-screen console can offer the same
+  // recovery without booting the game first.
+  wipeLocalData(opts) {
+    return wipeLocalData(opts);
   }
 
   resetEmulatorStorage() {
