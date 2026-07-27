@@ -1,0 +1,15 @@
+[Unit]
+Description=Poll for MultiBoyAdvance updates every 5 minutes
+
+[Timer]
+# First check shortly after boot, then every 5 minutes.
+OnBootSec=2min
+OnUnitActiveSec=5min
+# Spread the tick so it never lands exactly on the minute alongside everything
+# else on the box.
+RandomizedDelaySec=30
+Persistent=true
+Unit=mba-update.service
+
+[Install]
+WantedBy=timers.target

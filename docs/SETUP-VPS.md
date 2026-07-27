@@ -125,6 +125,54 @@ Add the `project2` A record at Vercel to the same IP, `sudo systemctl reload
 caddy`, done — certificates included. The MBA pattern
 (`/etc/systemd/system/mba.service`) is the template to copy.
 
+## 7. Auto-update — the box pulls from git by itself
+
+Once installed, the box checks `origin/main` every 5 minutes and
+fast-forwards itself. Push to main and it lands within ~5 minutes; no deploy
+step, no SSH.
+
+```bash
+# on the box, once
+sudo bash deploy/setup-autoupdate.sh
+```
+
+That converts `/opt/mba` into a git checkout and installs a systemd timer. If
+the repo is private it prints a deploy key, exits without changing anything,
+and you re-run it after pasting the key into
+**GitHub → Settings → Deploy keys** (read-only is enough).
+
+```bash
+systemctl list-timers mba-update       # when it next fires
+journalctl -t mba-update -n 50         # what it has done
+sudo systemctl start mba-update.service  # force a check now
+```
+
+**It restarts the world server only when `server/`, `web/` or `package.json`
+changed**, so a docs-only commit won't kick players out of the world. `npm
+install` runs only when a manifest moved.
+
+**It ships code, not the ROM.** `rom/build/mba.gba` is gitignored and never
+committed, so after a ROM rebuild you still run the deploy script. The same
+goes the other way: because they're gitignored, the ROM, `server/data`
+(world state), `node_modules` and `web/vendor` are never touched by an
+update.
+
+If the box has somehow diverged from `origin/main` the updater stops and says
+so rather than discarding whatever is there. Resolve it by hand on the box.
+
+`deploy/test-update.sh` exercises all of the above against a scratch repo —
+no box needed.
+
+### Doing the whole stack in one go
+
+`scripts/deploy-stack.ps1` (Windows) and `deploy/deploy-stack.sh` (WSL/macOS/
+Linux) run this and the Bermuda worker provisioning end to end from your
+laptop, cloning whatever they need:
+
+```powershell
+.\scripts\deploy-stack.ps1 -Server <box-ip>
+```
+
 ## Troubleshooting
 
 - `journalctl -u mba -n 50` — server logs; `systemctl status caddy` — proxy.

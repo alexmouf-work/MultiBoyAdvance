@@ -1,0 +1,11 @@
+[Unit]
+Description=Check for MultiBoyAdvance updates and apply them
+Documentation=https://mba.mouftools.com
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/mba/deploy/mba-update.sh
+# Fetch + npm install on a slow link; well short of the 5-minute tick.
+TimeoutStartSec=240
